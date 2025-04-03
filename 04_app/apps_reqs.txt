@@ -1,0 +1,10 @@
+streamlit
+pandas
+numpy
+torch
+earthengine-api
+folium
+geemap
+dask-geopandas
+shapely
+geopandas

@@ -1,0 +1,17 @@
+name: streamlit-env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.13
+  - streamlit
+  - pandas
+  - numpy
+  - pytorch
+  - torchvision
+  - earthengine-api
+  - folium
+  - geemap
+  - dask-geopandas
+  - shapely
+  - geopandas
