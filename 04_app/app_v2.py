@@ -8,9 +8,9 @@ import json
 import torch
 import torch.nn as nn
 
-import ee
-import folium
-import geemap.foliumap as geemap
+# import ee
+# import folium
+# import geemap.foliumap as geemap
 import dask_geopandas as dgpd
 from shapely.geometry import Point
 import geopandas as gpd
@@ -24,14 +24,14 @@ st.set_page_config(layout="wide")
 st.title("Site Suitability for Solar Micropowerplant Installation")
 
 # Initialize Earth Engine
-try:
-    ee.Initialize(project="micropower-app")
-except Exception as e:
-    st.error(f"Error initializing Earth Engine: {e}")
+# try:
+#     ee.Initialize(project="micropower-app")
+# except Exception as e:
+#     st.error(f"Error initializing Earth Engine: {e}")
 
 
 # Initialize Map
-m = geemap.Map(center=[12.8797, 121.7740], zoom=6)
+# m = geemap.Map(center=[12.8797, 121.7740], zoom=6)
 
 
 # Sidebar for File Upload and Legends
@@ -42,14 +42,17 @@ with st.sidebar:
 
 st.sidebar.write("### Loading datasets...")
 start_time = time.time()
-gdf_protected = dgpd.read_parquet("data/protected_areas_reprojected.parquet").compute()
-gdf_landcover = dgpd.read_parquet("data/land_cover_reprojected.parquet").compute()
+gdf_protected = dgpd.read_parquet("../01_processed_data/protected_areas_reprojected.parquet").compute()
+gdf_landcover = dgpd.read_parquet("../01_processed_data/land_cover_reprojected.parquet").compute()
+gdf_flood_5 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_5yr_reprojected.parquet").compute()
+gdf_flood_25 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_25yr_reprojected.parquet").compute()
+gdf_flood_100 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_100yr_reprojected.parquet").compute()
 st.sidebar.success(f"Data loaded in {time.time() - start_time:.2f} seconds")
 
 ## Load model
 # st.write("### Loading model...")
 start_time = time.time()
-with open("model_params/autoencoder_params.json", "r") as f:
+with open("../04_app/model_params/autoencoder_params.json", "r") as f: # CHANGE DIR
     loaded_params = json.load(f)
 
 num_features = loaded_params["num_features"]
@@ -83,7 +86,7 @@ class AutoEncoder(nn.Module):
 loaded_model = AutoEncoder(input_dim=num_features)
 
 # Load the trained weights
-loaded_model.load_state_dict(torch.load("model_weights/autoencoder_weights.pth"))
+loaded_model.load_state_dict(torch.load("../04_app/model_weights/autoencoder_weights.pth"))
 
 # Set the model to evaluation mode
 loaded_model.eval()
@@ -120,6 +123,13 @@ land_cover_mapping = {
     5: "Wetlands & Water Bodies"
 }
 
+flood_risk_mapping = {
+    0: "No Risk",
+    1: "Low",
+    2: "Medium",
+    3: "High"
+}
+
 # # Land Cover color mapping (highlighting Tree Cover & Crop Land)
 # land_cover_colors = {
 #     "Tree Cover": "background-color: #8B0000; color: white",  # Dark Red
@@ -142,7 +152,15 @@ def assess_suitability(df):
     print("Getting land cover type...")
     gdf_points = gdf_points.sjoin(gdf_landcover[['geometry', 'class_id']], how="left", predicate="intersects")
 
+    print("Getting flood risk...")
+    gdf_points = gdf_points.sjoin(gdf_flood_5[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_5'})
+    gdf_points = gdf_points.sjoin(gdf_flood_25[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_25'})
+    gdf_points = gdf_points.sjoin(gdf_flood_100[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_100'})
+
     st.sidebar.success("✅ Features retrieved successfully!")
+
+
+
     st.sidebar.write("### Assessing suitability...")
 
     # Drop unnecessary index_right column from spatial join
@@ -168,13 +186,32 @@ def assess_suitability(df):
         test_reconstruction_error = np.mean(np.square(df_encoded_array - test_reconstruction), axis=1)
         test_anomalies_autoencoder = np.where(test_reconstruction_error > threshold_autoencoder, 1, 0)
     
+
+    # Convert 'in_predicted_area' to 1/0
+    df['in_protected_area'] = gdf_points['in_protected_area']
+
+    # Get Flood Risk
+    df['FloodRisk_5yr'] = gdf_points['FloodRisk_5'].astype(int).map(flood_risk_mapping)
+    df['FloodRisk_25yr'] = gdf_points['FloodRisk_25'].astype(int).map(flood_risk_mapping)
+    df['FloodRisk_100yr'] = gdf_points['FloodRisk_100'].astype(int).map(flood_risk_mapping)
+
     # Map class_id to land cover names
     df['land_cover'] = gdf_points['class_id'].map(land_cover_mapping)
 
-    # Convert 'in_predicted_area' to 1/0
-    df['in_preotected_area'] = gdf_points['in_protected_area']
-
     df['suitability'] = np.where(test_anomalies_autoencoder == 1, "Likely Unsuitable", "Suitable")
+
+    rename_mapping = {
+        'in_protected_area': 'In Protected Area?',  # Fixing typo if intentional
+        'FloodRisk_5': 'Flood Risk (5-year)',
+        'FloodRisk_25': 'Flood Risk (25-year)',
+        'FloodRisk_100': 'FloFlood Risk (100-year)',
+        'class_id': 'Land Cover',
+        'suitability': 'Suitability',
+    }
+
+    df = df.rename(columns=rename_mapping)
+
+    
 
     return df
 
@@ -207,27 +244,27 @@ if uploaded_file is not None:
 
 
         # Add Markers to Map
-        for _, row in df.iterrows():
-            suitability = row['suitability']
+        # for _, row in df.iterrows():
+        #     suitability = row['suitability']
 
-            if suitability == "Suitable":
-                color = "green"
-            else:
-                color = "red"
+        #     if suitability == "Suitable":
+        #         color = "green"
+        #     else:
+        #         color = "red"
 
 
-            folium.CircleMarker(
-                location=[row["latitude"], row["longitude"]],
-                radius=5,
-                color=color,
-                fill=True,
-                fill_color=color,
-                fill_opacity=0.7,
-                popup=f"Lat: {row['latitude']}, Lon: {row['longitude']}, {row['suitability']}"
-            ).add_to(m)
+        #     folium.CircleMarker(
+        #         location=[row["latitude"], row["longitude"]],
+        #         radius=5,
+        #         color=color,
+        #         fill=True,
+        #         fill_color=color,
+        #         fill_opacity=0.7,
+        #         popup=f"Lat: {row['latitude']}, Lon: {row['longitude']}, {row['suitability']}"
+        #     ).add_to(m)
 
 # Show Map
-m.to_streamlit(height=600)
+# m.to_streamlit(height=600)
 
 
         
