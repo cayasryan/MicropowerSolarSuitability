@@ -2,6 +2,7 @@
 00_data/
 01_processed_data/
 02_processing/2.1_municipality_processing.ipynb
+sandbox/geemap-apps
 
 
 # Byte-compiled / optimized / DLL files
