@@ -8,9 +8,9 @@ import json
 import torch
 import torch.nn as nn
 
-# import ee
-# import folium
-# import geemap.foliumap as geemap
+import ee
+import folium
+import geemap.foliumap as geemap
 import dask_geopandas as dgpd
 from shapely.geometry import Point
 import geopandas as gpd
@@ -24,14 +24,14 @@ st.set_page_config(layout="wide")
 st.title("Site Suitability for Solar Micropowerplant Installation")
 
 # Initialize Earth Engine
-# try:
-#     ee.Initialize(project="micropower-app")
-# except Exception as e:
-#     st.error(f"Error initializing Earth Engine: {e}")
+try:
+    ee.Initialize(project="micropower-app")
+except Exception as e:
+    st.error(f"Error initializing Earth Engine: {e}")
 
 
 # Initialize Map
-# m = geemap.Map(center=[12.8797, 121.7740], zoom=6)
+m = geemap.Map(center=[12.8797, 121.7740], zoom=6)
 
 
 # Sidebar for File Upload and Legends
@@ -152,10 +152,13 @@ def assess_suitability(df):
     print("Getting land cover type...")
     gdf_points = gdf_points.sjoin(gdf_landcover[['geometry', 'class_id']], how="left", predicate="intersects")
 
+    # Drop unnecessary index_right column from spatial join
+    gdf_points = gdf_points.drop(columns=['index_right'])
+
     print("Getting flood risk...")
-    gdf_points = gdf_points.sjoin(gdf_flood_5[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_5'})
-    gdf_points = gdf_points.sjoin(gdf_flood_25[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_25'})
-    gdf_points = gdf_points.sjoin(gdf_flood_100[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_100'})
+    gdf_points = gdf_points.sjoin(gdf_flood_5[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_5'}).drop(columns=['index_right'], errors='ignore')
+    gdf_points = gdf_points.sjoin(gdf_flood_25[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_25'}).drop(columns=['index_right'], errors='ignore')
+    gdf_points = gdf_points.sjoin(gdf_flood_100[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_100'}).drop(columns=['index_right'], errors='ignore')
 
     st.sidebar.success("✅ Features retrieved successfully!")
 
@@ -163,8 +166,7 @@ def assess_suitability(df):
 
     st.sidebar.write("### Assessing suitability...")
 
-    # Drop unnecessary index_right column from spatial join
-    gdf_points = gdf_points.drop(columns=['index_right'])
+    
 
     # Define all possible land cover classes
     all_classes = [1, 2, 3, 4, 5]
@@ -202,10 +204,10 @@ def assess_suitability(df):
 
     rename_mapping = {
         'in_protected_area': 'In Protected Area?',  # Fixing typo if intentional
-        'FloodRisk_5': 'Flood Risk (5-year)',
-        'FloodRisk_25': 'Flood Risk (25-year)',
-        'FloodRisk_100': 'FloFlood Risk (100-year)',
-        'class_id': 'Land Cover',
+        'FloodRisk_5yr': 'Flood Risk (5-year)',
+        'FloodRisk_25yr': 'Flood Risk (25-year)',
+        'FloodRisk_100yr': 'FloFlood Risk (100-year)',
+        'land_cover': 'Land Cover',
         'suitability': 'Suitability',
     }
 
@@ -244,27 +246,27 @@ if uploaded_file is not None:
 
 
         # Add Markers to Map
-        # for _, row in df.iterrows():
-        #     suitability = row['suitability']
+        for _, row in df.iterrows():
+            suitability = row['suitability']
 
-        #     if suitability == "Suitable":
-        #         color = "green"
-        #     else:
-        #         color = "red"
+            if suitability == "Suitable":
+                color = "green"
+            else:
+                color = "red"
 
 
-        #     folium.CircleMarker(
-        #         location=[row["latitude"], row["longitude"]],
-        #         radius=5,
-        #         color=color,
-        #         fill=True,
-        #         fill_color=color,
-        #         fill_opacity=0.7,
-        #         popup=f"Lat: {row['latitude']}, Lon: {row['longitude']}, {row['suitability']}"
-        #     ).add_to(m)
+            folium.CircleMarker(
+                location=[row["latitude"], row["longitude"]],
+                radius=5,
+                color=color,
+                fill=True,
+                fill_color=color,
+                fill_opacity=0.7,
+                popup=f"Lat: {row['latitude']}, Lon: {row['longitude']}, {row['suitability']}"
+            ).add_to(m)
 
 # Show Map
-# m.to_streamlit(height=600)
+m.to_streamlit(height=600)
 
 
         
