@@ -15,7 +15,8 @@ import dask_geopandas as dgpd
 from shapely.geometry import Point
 import geopandas as gpd
 
-
+from shapely.strtree import STRtree
+import numpy as np
 
 
 
@@ -51,6 +52,7 @@ gdf_flood_25 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_25yr
 gdf_flood_100 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_100yr_reprojected.parquet").compute()
 
 faults_geom = gpd.read_file("../01_processed_data/faults_ph_geometry.geojson")
+residential = gpd.read_file("../01_processed_data/residential_areas.geojson")
 
 land_cover = ee.ImageCollection("ESA/WorldCover/v200").first()
 
@@ -62,6 +64,24 @@ precip = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("total_precip
 
 st.sidebar.success(f"Data loaded in {time.time() - start_time:.2f} seconds")
 #-----------------------------------------------------------------------------------------------------------------------------------
+
+
+# PROCESS RESIDENTIAL AREAS ------------------------------------------------------------------------------------------------------------------------------------
+
+# Create a spatial index from residential geometries
+res_geom_list = list(residential.geometry.values)  # ensure it's a plain list of geometries
+res_tree = STRtree(res_geom_list)
+
+# For each site, find the nearest residential polygon and compute distance
+def nearest_distance(site_geom):
+    if site_geom is None or site_geom.is_empty:
+        return np.nan
+    nearest_idx = res_tree.nearest(site_geom)
+    nearest_geom = res_tree.geometries.take(nearest_idx)
+
+    return site_geom.distance(nearest_geom)
+
+# -------------------------------------------------------
 
 
 # PROCESS GEE DATA ------------------------------------------------------------------------------------------------------------------------------------
@@ -225,7 +245,10 @@ def assess_suitability(df):
     # Get Min Distance to Fault Lines
     df["Min. Distance to Fault Line (m)"] = gdf_points.geometry.apply(
     lambda point: faults_geom.distance(point).min()
-)
+    )
+
+    df['Min. Distance to Residential Areas (m)'] = df.geometry.apply(nearest_distance)
+
 
     # drop geometry
     df = df.drop(columns=['geometry'])
