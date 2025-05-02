@@ -24,10 +24,10 @@ st.set_page_config(layout="wide")
 st.title("Site Suitability for Solar Micropowerplant Installation")
 
 # Initialize Earth Engine
-try:
-    ee.Initialize(project="micropower-app")
-except Exception as e:
-    st.error(f"Error initializing Earth Engine: {e}")
+# try:
+#     ee.Initialize(project="micropower-app")
+# except Exception as e:
+#     st.error(f"Error initializing Earth Engine: {e}")
 
 
 # Initialize Map
@@ -40,14 +40,85 @@ with st.sidebar:
     uploaded_file = st.file_uploader("CSV File (Latitude, Longitude)", type=["csv"])
 
 
+### LOAD DATASETS ------------------------------------------------------------------------------------------------------------------
+
 st.sidebar.write("### Loading datasets...")
 start_time = time.time()
 gdf_protected = dgpd.read_parquet("../01_processed_data/protected_areas_reprojected.parquet").compute()
-gdf_landcover = dgpd.read_parquet("../01_processed_data/land_cover_reprojected.parquet").compute()
+# gdf_landcover = dgpd.read_parquet("../01_processed_data/land_cover_reprojected.parquet").compute()
 gdf_flood_5 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_5yr_reprojected.parquet").compute()
 gdf_flood_25 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_25yr_reprojected.parquet").compute()
 gdf_flood_100 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_100yr_reprojected.parquet").compute()
+
+land_cover = ee.ImageCollection("ESA/WorldCover/v200").first()
+
+# Climate Datasets
+solar = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("surface_solar_radiation_downwards_sum").mean()
+temp = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("temperature_2m").mean()
+precip = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("total_precipitation_sum").mean()
+
+
 st.sidebar.success(f"Data loaded in {time.time() - start_time:.2f} seconds")
+#-----------------------------------------------------------------------------------------------------------------------------------
+
+
+# PROCESS GEE DATA ------------------------------------------------------------------------------------------------------------------------------------
+
+def create_feature_collection(df):
+    features = [
+        ee.Feature(ee.Geometry.Point(row['longitude'], row['latitude']), {'id': idx})
+        for idx, row in df.iterrows()
+    ]
+    return ee.FeatureCollection(features)
+
+
+# Extract Feature Data Function
+def extract_GEE_values(df):
+    fc_points = create_feature_collection(df)
+
+    sampled = land_cover \
+    .addBands(solar.rename("solar")) \
+    .addBands(temp.rename("temp")) \
+    .addBands(precip.rename("precip")) \
+    .sampleRegions(collection=fc_points, scale=10, geometries=True)
+
+    results = sampled.getInfo()
+
+    extracted = []
+    for f in results['features']:
+        props = f['properties']
+        extracted.append({
+            'id': props['id'],
+            'land_cover': props.get('Map'),  # land cover code
+            'Monthly Surface Solar Radiation (J/m²)': props.get('solar'), # Monthly Surface Solar Radiation (J/m²)
+            'Mean 2m Temperature (K)': props.get('temp'), # Mean 2m Temperature (K)
+            'Mean Monthly Precipitation (m)': props.get('precip'), # Mean Monthly Precipitation (m)
+        })
+
+    df['id'] = df.index
+    extracted = pd.DataFrame(extracted)
+
+    # Merge the extracted data with the original DataFrame
+    df_results = pd.merge(df, extracted, on='id', how='left')
+    # Drop the 'id' column
+    df_results = df_results.drop(columns=['id'])
+
+    # Decoding land cover codes
+    land_labels = {
+        10: "Tree Cover", 20: "Shrubland", 30: "Grassland", 40: "Cropland",
+        50: "Built-up", 60: "Bare/Sparse Veg", 70: "Snow/Ice", 80: "Water",
+        90: "Wetlands", 95: "Mangroves", 100: "Moss & Lichen"
+    }
+
+    df_results['Land Cover'] = df_results['land_cover'].map(land_labels)
+    # drop land cover code
+    df_results = df_results.drop(columns=['land_cover'])
+
+    return df_results
+
+
+# -------------------------------------------------------------------------------------------------------------------------------------
+
 
 ## Load model
 # st.write("### Loading model...")
@@ -115,13 +186,13 @@ suitability_colors = {
 }
 
 # Mapping dictionary
-land_cover_mapping = {
-    1: "Terrestrial Forest",
-    2: "Crop Areas",
-    3: "Barren/Flatland",
-    4: "Built-up",
-    5: "Wetlands & Water Bodies"
-}
+# land_cover_mapping = {
+#     1: "Terrestrial Forest",
+#     2: "Crop Areas",
+#     3: "Barren/Flatland",
+#     4: "Built-up",
+#     5: "Wetlands & Water Bodies"
+# }
 
 flood_risk_mapping = {
     0: "No Risk",
@@ -144,16 +215,23 @@ def assess_suitability(df):
     gdf_points = gpd.GeoDataFrame(df, geometry=geometry, crs="EPSG:4326")
     gdf_points = gdf_points.to_crs(epsg=32651)
 
+    # Extract GEE values
+    print("Extracting GEE values...")
+    df = extract_GEE_values(gdf_points)
+
+    # drop geometry
+    df = df.drop(columns=['geometry'])
+
     # Check if points are inside protected areas
     print("Checking if points are inside protected areas...")
     gdf_points["in_protected_area"] = gdf_points.sjoin(gdf_protected, how="left", predicate="intersects")['index_right'].notnull()
 
     # Get land cover type (assuming land cover GeoDataFrame has a 'land_type' column)
-    print("Getting land cover type...")
-    gdf_points = gdf_points.sjoin(gdf_landcover[['geometry', 'class_id']], how="left", predicate="intersects")
+    # print("Getting land cover type...")
+    # gdf_points = gdf_points.sjoin(gdf_landcover[['geometry', 'class_id']], how="left", predicate="intersects")
 
     # Drop unnecessary index_right column from spatial join
-    gdf_points = gdf_points.drop(columns=['index_right'])
+    # gdf_points = gdf_points.drop(columns=['index_right'])
 
     print("Getting flood risk...")
     gdf_points = gdf_points.sjoin(gdf_flood_5[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_5'}).drop(columns=['index_right'], errors='ignore')
@@ -165,28 +243,27 @@ def assess_suitability(df):
 
 
     st.sidebar.write("### Assessing suitability...")
-
     
 
     # Define all possible land cover classes
-    all_classes = [1, 2, 3, 4, 5]
+    # all_classes = [1, 2, 3, 4, 5]
 
-    # Ensure all classes appear in one-hot encoding
-    gdf_points['class_id'] = pd.Categorical(gdf_points['class_id'], categories=all_classes)
-    df_encoded = pd.get_dummies(gdf_points[['class_id']], columns=['class_id'], prefix='landcover_class').astype(int)
+    # # Ensure all classes appear in one-hot encoding
+    # gdf_points['class_id'] = pd.Categorical(gdf_points['class_id'], categories=all_classes)
+    # df_encoded = pd.get_dummies(gdf_points[['class_id']], columns=['class_id'], prefix='landcover_class').astype(int)
 
 
     # Convert boolean 'in_predicted_area' to 1/0
-    df_encoded['in_preotected_area'] = gdf_points['in_protected_area'].astype(int)
+    # df_encoded['in_preotected_area'] = gdf_points['in_protected_area'].astype(int)
 
-    df_encoded_array = df_encoded.to_numpy()
+    # df_encoded_array = df_encoded.to_numpy()
 
-    df_encoded_tensor = torch.tensor(df_encoded_array, dtype=torch.float32)
+    # df_encoded_tensor = torch.tensor(df_encoded_array, dtype=torch.float32)
 
-    with torch.no_grad():
-        test_reconstruction = loaded_model(df_encoded_tensor).numpy()
-        test_reconstruction_error = np.mean(np.square(df_encoded_array - test_reconstruction), axis=1)
-        test_anomalies_autoencoder = np.where(test_reconstruction_error > threshold_autoencoder, 1, 0)
+    # with torch.no_grad():
+    #     test_reconstruction = loaded_model(df_encoded_tensor).numpy()
+    #     test_reconstruction_error = np.mean(np.square(df_encoded_array - test_reconstruction), axis=1)
+    #     test_anomalies_autoencoder = np.where(test_reconstruction_error > threshold_autoencoder, 1, 0)
     
 
     # Convert 'in_predicted_area' to 1/0
@@ -198,23 +275,25 @@ def assess_suitability(df):
     df['FloodRisk_100yr'] = gdf_points['FloodRisk_100'].astype(int).map(flood_risk_mapping)
 
     # Map class_id to land cover names
-    df['land_cover'] = gdf_points['class_id'].map(land_cover_mapping)
+    # df['land_cover'] = gdf_points['class_id'].map(land_cover_mapping)
 
-    df['suitability'] = np.where(test_anomalies_autoencoder == 1, "Likely Unsuitable", "Suitable")
+    # df['suitability'] = np.where(test_anomalies_autoencoder == 1, "Likely Unsuitable", "Suitable")
+
+    # Randomly assign suitability for demonstration
+    df['suitability'] = np.random.choice(suitability_categories, size=len(df))
 
     rename_mapping = {
         'in_protected_area': 'In Protected Area?',  # Fixing typo if intentional
         'FloodRisk_5yr': 'Flood Risk (5-year)',
         'FloodRisk_25yr': 'Flood Risk (25-year)',
-        'FloodRisk_100yr': 'FloFlood Risk (100-year)',
-        'land_cover': 'Land Cover',
+        'FloodRisk_100yr': 'Flood Risk (100-year)',
+        # 'land_cover': 'Land Cover',
         'suitability': 'Suitability',
     }
 
     df = df.rename(columns=rename_mapping)
 
     
-
     return df
 
 
@@ -246,8 +325,8 @@ if uploaded_file is not None:
 
 
         # Add Markers to Map
-        for _, row in df.iterrows():
-            suitability = row['suitability']
+        for _, row in df_pred.iterrows():
+            suitability = row['Suitability']
 
             if suitability == "Suitable":
                 color = "green"
@@ -262,7 +341,7 @@ if uploaded_file is not None:
                 fill=True,
                 fill_color=color,
                 fill_opacity=0.7,
-                popup=f"Lat: {row['latitude']}, Lon: {row['longitude']}, {row['suitability']}"
+                popup=f"Lat: {row['latitude']}, Lon: {row['longitude']}, {row['Suitability']}"
             ).add_to(m)
 
 # Show Map
