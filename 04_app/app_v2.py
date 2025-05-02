@@ -50,6 +50,8 @@ gdf_flood_5 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_5yr_r
 gdf_flood_25 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_25yr_reprojected.parquet").compute()
 gdf_flood_100 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_100yr_reprojected.parquet").compute()
 
+faults_geom = gpd.read_file("../01_processed_data/faults_ph_geometry.geojson")
+
 land_cover = ee.ImageCollection("ESA/WorldCover/v200").first()
 
 # Climate Datasets
@@ -218,6 +220,12 @@ def assess_suitability(df):
     # Extract GEE values
     print("Extracting GEE values...")
     df = extract_GEE_values(gdf_points)
+
+
+    # Get Min Distance to Fault Lines
+    df["Min. Distance to Fault Line (m)"] = gdf_points.geometry.apply(
+    lambda point: faults_geom.distance(point).min()
+)
 
     # drop geometry
     df = df.drop(columns=['geometry'])

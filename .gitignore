@@ -2,6 +2,7 @@
 00_data/
 01_processed_data/
 02_processing/2.1_municipality_processing.ipynb
+02_processing/cache/
 sandbox/geemap-apps
 
 
