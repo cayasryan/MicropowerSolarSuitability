@@ -2,7 +2,7 @@ streamlit
 pandas
 numpy
 torch
-earthengine-api
+# earthengine-api
 folium
 geemap
 dask-geopandas
