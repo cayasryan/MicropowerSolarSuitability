@@ -22,7 +22,8 @@ import numpy as np
 
 # Streamlit UI Setup
 st.set_page_config(layout="wide")
-st.title("Site Suitability for Solar Micropowerplant Installation")
+st.title("SolMate")
+st.subheader("Your smart companion for solar site assessment.")
 
 # Initialize Earth Engine
 # try:
@@ -38,7 +39,7 @@ m = geemap.Map(center=[12.8797, 121.7740], zoom=6)
 # Sidebar for File Upload and Legends
 with st.sidebar:
     st.header("Upload Coordinates")
-    uploaded_file = st.file_uploader("CSV File (Latitude, Longitude)", type=["csv"])
+    uploaded_file = st.file_uploader("Upload a CSV file containing columns for Latitude and Longitude", type=["csv"])
 
 
 ### LOAD DATASETS ------------------------------------------------------------------------------------------------------------------
@@ -46,13 +47,18 @@ with st.sidebar:
 st.sidebar.write("### Loading datasets...")
 start_time = time.time()
 gdf_protected = dgpd.read_parquet("../01_processed_data/protected_areas_reprojected.parquet").compute()
+gdf_kba = gpd.read_file("../01_processed_data/philippines_kba.geojson")
 # gdf_landcover = dgpd.read_parquet("../01_processed_data/land_cover_reprojected.parquet").compute()
 gdf_flood_5 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_5yr_reprojected.parquet").compute()
 gdf_flood_25 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_25yr_reprojected.parquet").compute()
 gdf_flood_100 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_100yr_reprojected.parquet").compute()
 
 faults_geom = gpd.read_file("../01_processed_data/faults_ph_geometry.geojson")
-residential = gpd.read_file("../01_processed_data/residential_areas.geojson")
+
+residential_1 = gpd.read_file("../01_processed_data/residential_areas_part1.geojson")
+residential_2 = gpd.read_file("../01_processed_data/residential_areas_part2.geojson")
+residential = pd.concat([residential_1, residential_2], ignore_index=True)
+
 
 land_cover = ee.ImageCollection("ESA/WorldCover/v200").first()
 
@@ -256,6 +262,8 @@ def assess_suitability(df):
     # Check if points are inside protected areas
     print("Checking if points are inside protected areas...")
     gdf_points["in_protected_area"] = gdf_points.sjoin(gdf_protected, how="left", predicate="intersects")['index_right'].notnull()
+    gdf_points["in_KBA"] = gdf_points.sjoin(gdf_kba, how="left", predicate="intersects")['index_right'].notnull()
+
 
     # Get land cover type (assuming land cover GeoDataFrame has a 'land_type' column)
     # print("Getting land cover type...")
@@ -299,6 +307,7 @@ def assess_suitability(df):
 
     # Convert 'in_predicted_area' to 1/0
     df['in_protected_area'] = gdf_points['in_protected_area']
+    df['in_KBA'] = gdf_points['in_KBA']
 
     # Get Flood Risk
     df['FloodRisk_5yr'] = gdf_points['FloodRisk_5'].astype(int).map(flood_risk_mapping)
@@ -311,15 +320,16 @@ def assess_suitability(df):
     # df['suitability'] = np.where(test_anomalies_autoencoder == 1, "Likely Unsuitable", "Suitable")
 
     # Randomly assign suitability for demonstration
-    df['suitability'] = np.random.choice(suitability_categories, size=len(df))
+    # df['suitability'] = np.random.choice(suitability_categories, size=len(df))
 
     rename_mapping = {
-        'in_protected_area': 'In Protected Area?',  # Fixing typo if intentional
+        'in_protected_area': 'In Protected Area?',
+        'in_KBA': 'In KBA?',
         'FloodRisk_5yr': 'Flood Risk (5-year)',
         'FloodRisk_25yr': 'Flood Risk (25-year)',
         'FloodRisk_100yr': 'Flood Risk (100-year)',
         # 'land_cover': 'Land Cover',
-        'suitability': 'Suitability',
+        # 'suitability': 'Suitability',
     }
 
     df = df.rename(columns=rename_mapping)
@@ -357,12 +367,14 @@ if uploaded_file is not None:
 
         # Add Markers to Map
         for _, row in df_pred.iterrows():
-            suitability = row['Suitability']
+            # suitability = row['Suitability']
 
-            if suitability == "Suitable":
-                color = "green"
-            else:
-                color = "red"
+            color = "gray"
+
+            # if suitability == "Suitable":
+            #     color = "green"
+            # else:
+            #     color = "red"
 
 
             folium.CircleMarker(

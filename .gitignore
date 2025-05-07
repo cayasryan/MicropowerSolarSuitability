@@ -1,8 +1,14 @@
 ## folders and files
 00_data/
-01_processed_data/
+01_processed_data/flood_risk/
 02_processing/2.1_municipality_processing.ipynb
 02_processing/cache/
+02_processing/flood_5_split
+02_processing/flood_25_split
+02_processing/flood_100_split
+02_processing/flood_5_split_parquet
+02_processing/flood_25_split_parquet
+02_processing/flood_100_split_parquet
 sandbox/geemap-apps
 
 
