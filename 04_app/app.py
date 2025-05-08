@@ -88,9 +88,9 @@ def merge_parquet_folder(folder_path):
     merged_gdf = gpd.GeoDataFrame(pd.concat(gdfs, ignore_index=True), crs=gdfs[0].crs)
     return merged_gdf
 
-gdf_flood_5 = merge_parquet_folder("01_processed_data/flood_5_split_parquet")
-gdf_flood_25 = merge_parquet_folder("01_processed_data/flood_25_split_parquet")
-gdf_flood_100 = merge_parquet_folder("01_processed_data/flood_100_split_parquet")
+# gdf_flood_5 = merge_parquet_folder("01_processed_data/flood_5_split_parquet")
+# gdf_flood_25 = merge_parquet_folder("01_processed_data/flood_25_split_parquet")
+# gdf_flood_100 = merge_parquet_folder("01_processed_data/flood_100_split_parquet")
 
 st.sidebar.success(f"Data loaded in {time.time() - start_time:.2f} seconds")
 # -----------------------------------------------------
@@ -297,10 +297,10 @@ def assess_suitability(df):
     # Drop unnecessary index_right column from spatial join
     # gdf_points = gdf_points.drop(columns=['index_right'])
 
-    print("Getting flood risk...")
-    gdf_points = gdf_points.sjoin(gdf_flood_5[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_5'}).drop(columns=['index_right'], errors='ignore')
-    gdf_points = gdf_points.sjoin(gdf_flood_25[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_25'}).drop(columns=['index_right'], errors='ignore')
-    gdf_points = gdf_points.sjoin(gdf_flood_100[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_100'}).drop(columns=['index_right'], errors='ignore')
+    # print("Getting flood risk...")
+    # gdf_points = gdf_points.sjoin(gdf_flood_5[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_5'}).drop(columns=['index_right'], errors='ignore')
+    # gdf_points = gdf_points.sjoin(gdf_flood_25[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_25'}).drop(columns=['index_right'], errors='ignore')
+    # gdf_points = gdf_points.sjoin(gdf_flood_100[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_100'}).drop(columns=['index_right'], errors='ignore')
 
     st.sidebar.success("✅ Features retrieved successfully!")
 
@@ -335,9 +335,9 @@ def assess_suitability(df):
     df['in_KBA'] = gdf_points['in_KBA']
 
     # Get Flood Risk
-    df['FloodRisk_5yr'] = gdf_points['FloodRisk_5'].astype(int).map(flood_risk_mapping)
-    df['FloodRisk_25yr'] = gdf_points['FloodRisk_25'].astype(int).map(flood_risk_mapping)
-    df['FloodRisk_100yr'] = gdf_points['FloodRisk_100'].astype(int).map(flood_risk_mapping)
+    # df['FloodRisk_5yr'] = gdf_points['FloodRisk_5'].astype(int).map(flood_risk_mapping)
+    # df['FloodRisk_25yr'] = gdf_points['FloodRisk_25'].astype(int).map(flood_risk_mapping)
+    # df['FloodRisk_100yr'] = gdf_points['FloodRisk_100'].astype(int).map(flood_risk_mapping)
 
     # Map class_id to land cover names
     # df['land_cover'] = gdf_points['class_id'].map(land_cover_mapping)
@@ -350,9 +350,9 @@ def assess_suitability(df):
     rename_mapping = {
         'in_protected_area': 'In Protected Area?',
         'in_KBA': 'In KBA?',
-        'FloodRisk_5yr': 'Flood Risk (5-year)',
-        'FloodRisk_25yr': 'Flood Risk (25-year)',
-        'FloodRisk_100yr': 'Flood Risk (100-year)',
+        # 'FloodRisk_5yr': 'Flood Risk (5-year)',
+        # 'FloodRisk_25yr': 'Flood Risk (25-year)',
+        # 'FloodRisk_100yr': 'Flood Risk (100-year)',
         # 'land_cover': 'Land Cover',
         # 'suitability': 'Suitability',
     }
