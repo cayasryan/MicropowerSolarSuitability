@@ -5,12 +5,16 @@ import random
 import time
 import json
 
+import os
+from glob import glob
+
 import torch
 import torch.nn as nn
 
 import ee
 import folium
 import geemap.foliumap as geemap
+import geopandas as gpd
 import dask_geopandas as dgpd
 from shapely.geometry import Point
 import geopandas as gpd
@@ -49,9 +53,9 @@ start_time = time.time()
 gdf_protected = dgpd.read_parquet("../01_processed_data/protected_areas_reprojected.parquet").compute()
 gdf_kba = gpd.read_file("../01_processed_data/philippines_kba.geojson")
 # gdf_landcover = dgpd.read_parquet("../01_processed_data/land_cover_reprojected.parquet").compute()
-gdf_flood_5 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_5yr_reprojected.parquet").compute()
-gdf_flood_25 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_25yr_reprojected.parquet").compute()
-gdf_flood_100 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_100yr_reprojected.parquet").compute()
+# gdf_flood_5 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_5yr_reprojected.parquet").compute()
+# gdf_flood_25 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_25yr_reprojected.parquet").compute()
+# gdf_flood_100 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_100yr_reprojected.parquet").compute()
 
 faults_geom = gpd.read_file("../01_processed_data/faults_ph_geometry.geojson")
 
@@ -68,8 +72,29 @@ temp = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("temperature_2m
 precip = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("total_precipitation_sum").mean()
 
 
-st.sidebar.success(f"Data loaded in {time.time() - start_time:.2f} seconds")
 #-----------------------------------------------------------------------------------------------------------------------------------
+
+
+### LOAD AND PROCESS FLOOD RISK FILES -------------------------------------------------------------
+
+def merge_parquet_folder(folder_path):
+    # Get all .parquet files in the folder
+    parquet_files = sorted(glob(os.path.join(folder_path, "*.parquet")))
+
+    # Use list comprehension to read each file into a GeoDataFrame
+    gdfs = [gpd.read_parquet(f) for f in parquet_files]
+
+    # Concatenate into one GeoDataFrame
+    merged_gdf = gpd.GeoDataFrame(pd.concat(gdfs, ignore_index=True), crs=gdfs[0].crs)
+    return merged_gdf
+
+gdf_flood_5 = merge_parquet_folder("../01_processed_data/flood_5_split_parquet")
+gdf_flood_25 = merge_parquet_folder("../01_processed_data/flood_25_split_parquet")
+gdf_flood_100 = merge_parquet_folder("../01_processed_data/flood_100_split_parquet")
+
+st.sidebar.success(f"Data loaded in {time.time() - start_time:.2f} seconds")
+# -----------------------------------------------------
+
 
 
 # PROCESS RESIDENTIAL AREAS ------------------------------------------------------------------------------------------------------------------------------------
@@ -384,7 +409,7 @@ if uploaded_file is not None:
                 fill=True,
                 fill_color=color,
                 fill_opacity=0.7,
-                popup=f"Lat: {row['latitude']}, Lon: {row['longitude']}, {row['Suitability']}"
+                popup=f"Lat: {row['latitude']}, Lon: {row['longitude']}"
             ).add_to(m)
 
 # Show Map
