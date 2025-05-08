@@ -50,17 +50,17 @@ with st.sidebar:
 
 st.sidebar.write("### Loading datasets...")
 start_time = time.time()
-gdf_protected = dgpd.read_parquet("../01_processed_data/protected_areas_reprojected.parquet").compute()
-gdf_kba = gpd.read_file("../01_processed_data/philippines_kba.geojson")
+gdf_protected = dgpd.read_parquet("01_processed_data/protected_areas_reprojected.parquet").compute()
+gdf_kba = gpd.read_file("01_processed_data/philippines_kba.geojson")
 # gdf_landcover = dgpd.read_parquet("../01_processed_data/land_cover_reprojected.parquet").compute()
 # gdf_flood_5 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_5yr_reprojected.parquet").compute()
 # gdf_flood_25 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_25yr_reprojected.parquet").compute()
 # gdf_flood_100 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_100yr_reprojected.parquet").compute()
 
-faults_geom = gpd.read_file("../01_processed_data/faults_ph_geometry.geojson")
+faults_geom = gpd.read_file("01_processed_data/faults_ph_geometry.geojson")
 
-residential_1 = gpd.read_file("../01_processed_data/residential_areas_part1.geojson")
-residential_2 = gpd.read_file("../01_processed_data/residential_areas_part2.geojson")
+residential_1 = gpd.read_file("01_processed_data/residential_areas_part1.geojson")
+residential_2 = gpd.read_file("01_processed_data/residential_areas_part2.geojson")
 residential = pd.concat([residential_1, residential_2], ignore_index=True)
 
 
@@ -88,9 +88,9 @@ def merge_parquet_folder(folder_path):
     merged_gdf = gpd.GeoDataFrame(pd.concat(gdfs, ignore_index=True), crs=gdfs[0].crs)
     return merged_gdf
 
-gdf_flood_5 = merge_parquet_folder("../01_processed_data/flood_5_split_parquet")
-gdf_flood_25 = merge_parquet_folder("../01_processed_data/flood_25_split_parquet")
-gdf_flood_100 = merge_parquet_folder("../01_processed_data/flood_100_split_parquet")
+gdf_flood_5 = merge_parquet_folder("01_processed_data/flood_5_split_parquet")
+gdf_flood_25 = merge_parquet_folder("01_processed_data/flood_25_split_parquet")
+gdf_flood_100 = merge_parquet_folder("01_processed_data/flood_100_split_parquet")
 
 st.sidebar.success(f"Data loaded in {time.time() - start_time:.2f} seconds")
 # -----------------------------------------------------
@@ -175,45 +175,45 @@ def extract_GEE_values(df):
 
 ## Load model
 # st.write("### Loading model...")
-start_time = time.time()
-with open("../04_app/model_params/autoencoder_params.json", "r") as f: # CHANGE DIR
-    loaded_params = json.load(f)
+# start_time = time.time()
+# with open("../04_app/model_params/autoencoder_params.json", "r") as f: # CHANGE DIR
+#     loaded_params = json.load(f)
 
-num_features = loaded_params["num_features"]
-threshold_autoencoder = loaded_params["threshold_autoencoder"]
+# num_features = loaded_params["num_features"]
+# threshold_autoencoder = loaded_params["threshold_autoencoder"]
 
-class AutoEncoder(nn.Module):
-    def __init__(self, input_dim):
-        super(AutoEncoder, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Linear(input_dim, 64),
-            nn.ReLU(),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Linear(32, 16)
-        )
-        self.decoder = nn.Sequential(
-            nn.Linear(16, 32),
-            nn.ReLU(),
-            nn.Linear(32, 64),
-            nn.ReLU(),
-            nn.Linear(64, input_dim),
-            nn.Sigmoid()  # Use Sigmoid for reconstruction between [0, 1]
-        )
+# class AutoEncoder(nn.Module):
+#     def __init__(self, input_dim):
+#         super(AutoEncoder, self).__init__()
+#         self.encoder = nn.Sequential(
+#             nn.Linear(input_dim, 64),
+#             nn.ReLU(),
+#             nn.Linear(64, 32),
+#             nn.ReLU(),
+#             nn.Linear(32, 16)
+#         )
+#         self.decoder = nn.Sequential(
+#             nn.Linear(16, 32),
+#             nn.ReLU(),
+#             nn.Linear(32, 64),
+#             nn.ReLU(),
+#             nn.Linear(64, input_dim),
+#             nn.Sigmoid()  # Use Sigmoid for reconstruction between [0, 1]
+#         )
 
-    def forward(self, x):
-        encoded = self.encoder(x)
-        decoded = self.decoder(encoded)
-        return decoded
+#     def forward(self, x):
+#         encoded = self.encoder(x)
+#         decoded = self.decoder(encoded)
+#         return decoded
 
-# Instantiate the model again
-loaded_model = AutoEncoder(input_dim=num_features)
+# # Instantiate the model again
+# loaded_model = AutoEncoder(input_dim=num_features)
 
-# Load the trained weights
-loaded_model.load_state_dict(torch.load("../04_app/model_weights/autoencoder_weights.pth"))
+# # Load the trained weights
+# loaded_model.load_state_dict(torch.load("../04_app/model_weights/autoencoder_weights.pth"))
 
-# Set the model to evaluation mode
-loaded_model.eval()
+# # Set the model to evaluation mode
+# loaded_model.eval()
 
 # st.write(f"Model loaded in {time.time() - start_time:.2f} seconds")
 
