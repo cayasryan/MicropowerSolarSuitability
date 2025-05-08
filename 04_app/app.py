@@ -71,6 +71,26 @@ solar = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("surface_solar
 temp = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("temperature_2m").mean()
 precip = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("total_precipitation_sum").mean()
 
+# Flood Data
+flood_collection = ee.ImageCollection("GLOBAL_FLOOD_DB/MODIS_EVENTS/V1") \
+    .select("flooded") \
+    .map(lambda img: img.unmask(0))  # Replace null/masked values with 0
+
+flood = flood_collection.sum()# flood_depth = ee.ImageCollection("JRC/CEMS_GLOFAS/FloodHazard/v1").select("depth").mean()
+
+flood_depth_collection = ee.ImageCollection("JRC/CEMS_GLOFAS/FloodHazard/v1") \
+    .select("depth") \
+    .map(lambda img: img.unmask(0))  # Replace null/masked values with 0
+flood_depth_mean = flood_depth_collection.mean()
+flood_depth_max = flood_depth_collection.max()
+
+# flood_depth = ee.ImageCollection("JRC/CEMS_GLOFAS/FloodHazard/v1").select("depth").max()
+
+
+# flood_max = ee.ImageCollection("GLOBAL_FLOOD_DB/MODIS_EVENTS/V1").select("flooded").max()
+# flood_mean = ee.ImageCollection("GLOBAL_FLOOD_DB/MODIS_EVENTS/V1").select("flooded").mean()
+# flood_dur_max = ee.ImageCollection("GLOBAL_FLOOD_DB/MODIS_EVENTS/V1").select("duration").max()
+# flood_dur_mean = ee.ImageCollection("GLOBAL_FLOOD_DB/MODIS_EVENTS/V1").select("duration").mean()
 
 #-----------------------------------------------------------------------------------------------------------------------------------
 
@@ -129,13 +149,29 @@ def create_feature_collection(df):
 def extract_GEE_values(df):
     fc_points = create_feature_collection(df)
 
+
+
     sampled = land_cover \
     .addBands(solar.rename("solar")) \
     .addBands(temp.rename("temp")) \
     .addBands(precip.rename("precip")) \
+    .addBands(flood.rename("flood")) \
+    .addBands(flood_depth_mean.rename("flood_mean")) \
+    .addBands(flood_depth_max.rename("flood_max")) \
     .sampleRegions(collection=fc_points, scale=10, geometries=True)
 
+
+    # .addBands(flood_depth_mean.rename("flood_mean")) \
+    # .addBands(flood_depth_max.rename("flood_max")) \
+
+     # .addBands(flood_max.rename("flood_max")) \
+    # .addBands(flood_mean.rename("flood_mean")) \
+    # .addBands(flood_dur_max.rename("flood_dur_max")) \
+    # .addBands(flood_dur_mean.rename("flood_dur_mean")) \
+
     results = sampled.getInfo()
+    print(results)
+
 
     extracted = []
     for f in results['features']:
@@ -146,6 +182,13 @@ def extract_GEE_values(df):
             'Monthly Surface Solar Radiation (J/m²)': props.get('solar'), # Monthly Surface Solar Radiation (J/m²)
             'Mean 2m Temperature (K)': props.get('temp'), # Mean 2m Temperature (K)
             'Mean Monthly Precipitation (m)': props.get('precip'), # Mean Monthly Precipitation (m)
+            'Flood Extent History': props.get('flood'), 
+            'Mean Flood Depth (m)': props.get('flood_mean'), # Mean Flood Depth (m)
+            'Max Flood Depth (m)': props.get('flood_max'), # Max Flood Depth (m)
+            # 'Mean Flood Duration (days)': props.get('flood_dur_mean'), # Mean Flood Duration (days)
+            # 'Max Flood Duration (days)': props.get('flood_dur_max'), # Max Flood Duration (days)
+            # 'Mean Flood Extent (%)': props.get('flood_mean'), 
+            # 'Max Flood Extent (%)': props.get('flood_max')
         })
 
     df['id'] = df.index
@@ -266,11 +309,12 @@ def assess_suitability(df):
     print("Converting DataFrame to GeoDataFrame...")
     geometry = [Point(xy) for xy in zip(df['longitude'], df['latitude'])]
     gdf_points = gpd.GeoDataFrame(df, geometry=geometry, crs="EPSG:4326")
-    gdf_points = gdf_points.to_crs(epsg=32651)
 
     # Extract GEE values
     print("Extracting GEE values...")
     df = extract_GEE_values(gdf_points)
+
+    gdf_points = gdf_points.to_crs(epsg=32651)
 
 
     # Get Min Distance to Fault Lines
