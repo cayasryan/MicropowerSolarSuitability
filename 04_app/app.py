@@ -332,8 +332,18 @@ def assess_suitability(df):
 
     # Check if points are inside protected areas
     st.sidebar.write("Checking for restricted areas...")
-    gdf_points["in_protected_area"] = gdf_points.sjoin(gdf_protected, how="left", predicate="intersects")['index_right'].notnull()
-    gdf_points["in_KBA"] = gdf_points.sjoin(gdf_kba, how="left", predicate="intersects")['index_right'].notnull()
+    gdf_points = gdf_points.reset_index(drop=True)
+    joined_gdf = gdf_points.sjoin(gdf_protected, how="left", predicate="intersects")
+    joined_gdf = joined_gdf.sort_values(by='index_right', ascending=False)
+    joined_gdf = joined_gdf[~joined_gdf.index.duplicated(keep='first')]
+    gdf_points["in_protected_area"] = joined_gdf['index_right'].notnull()
+
+
+    gdf_points = gdf_points.reset_index(drop=True)
+    joined_gdf = gdf_points.sjoin(gdf_kba, how="left", predicate="intersects")
+    joined_gdf = joined_gdf.sort_values(by='index_right', ascending=False)
+    joined_gdf = joined_gdf[~joined_gdf.index.duplicated(keep='first')]
+    gdf_points["in_KBA"] = joined_gdf['index_right'].notnull()
 
 
     # Get land cover type (assuming land cover GeoDataFrame has a 'land_type' column)
