@@ -1,4 +1,6 @@
 import streamlit as st
+# from streamlit_theme import st_theme
+
 import pandas as pd
 import numpy as np
 import random
@@ -29,6 +31,7 @@ import numpy as np
 st.set_page_config(layout="wide")
 st.title("SolMate")
 st.subheader("Your smart companion for solar site assessment.")
+
 
 # service_account_info = {
 #     "type": st.secrets["earthengine"]["type"],
@@ -329,7 +332,7 @@ def assess_suitability(df):
     start_time = time.time()
 
     # Convert DataFrame to GeoDataFrame
-    print("Converting DataFrame to GeoDataFrame...")
+    # print("Converting DataFrame to GeoDataFrame...")
     geometry = [Point(xy) for xy in zip(df['longitude'], df['latitude'])]
     gdf_points = gpd.GeoDataFrame(df, geometry=geometry, crs="EPSG:4326")
 
@@ -600,14 +603,26 @@ if uploaded_file is not None:
 
         def highlight_suitability_and_features(row):
             # Define a dictionary of highlight colors
+            # Detect current theme
+            # theme = st_theme()['base']
+
+            # if theme == "dark":
+            # highlight_colors = {
+            #     'suitable': 'background-color: #26532B',             # Dark green
+            #     'likely_unsuitable': 'background-color: #6E1E1E',    # Dark red
+            #     'recommendation_suitable': 'background-color: #26532B',
+            #     'recommendation_unsuitable': 'background-color: #6E1E1E',
+            #     'highlight_affected_feature': 'background-color: #6E1E1E'
+            # }
+            # else:
             highlight_colors = {
-                'suitable': 'background-color: #d4edda',             # Green-ish
-                'likely_unsuitable': 'background-color: #f8d7da',    # Light red
-                'unsuitable': 'background-color: #f5c6cb',           # Darker red
-                'recommendation_suitable': 'background-color: #d4edda',  # Green-ish for recommendations when suitable
-                'recommendation_unsuitable': 'background-color: #f8d7da',  # Light red for unsuitable recommendations
-                'highlight_affected_feature': 'background-color: #f8d7da'  # Light red for features causing unsuitability
+                'suitable': 'background-color: #d4edda',
+                'likely_unsuitable': 'background-color: #f8d7da',
+                'recommendation_suitable': 'background-color: #d4edda',
+                'recommendation_unsuitable': 'background-color: #f8d7da',
+                'highlight_affected_feature': 'background-color: #f8d7da'
             }
+
 
             # Initialize an empty list for cell styles
             highlight = [''] * len(row)
@@ -620,8 +635,8 @@ if uploaded_file is not None:
                 highlight[columns.index('Suitability')] = highlight_colors['suitable']
             elif row['Suitability'] == 'Likely Unsuitable':
                 highlight[columns.index('Suitability')] = highlight_colors['likely_unsuitable']
-            elif row['Suitability'] == 'Unsuitable':
-                highlight[columns.index('Suitability')] = highlight_colors['unsuitable']
+            # elif row['Suitability'] == 'Unsuitable':
+            #     highlight[columns.index('Suitability')] = highlight_colors['unsuitable']
 
             # Highlight recommendation column based on suitability
             if row['Suitability'] != 'Suitable':
@@ -697,10 +712,7 @@ if uploaded_file is not None:
         
 
 
-
-
         # Display Table
-        st.write("### Extracted Geospatial Data")
         st.dataframe(styled_df)
         
         # Downloadable CSV
