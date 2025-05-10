@@ -30,10 +30,10 @@ st.title("SolMate")
 st.subheader("Your smart companion for solar site assessment.")
 
 # Initialize Earth Engine
-# try:
-#     ee.Initialize(project="micropower-app")
-# except Exception as e:
-#     st.error(f"Error initializing Earth Engine: {e}")
+try:
+    ee.Initialize(project="micropower-app")
+except Exception as e:
+    st.error(f"Error initializing Earth Engine: {e}")
 
 
 # Initialize Map
@@ -170,8 +170,6 @@ def extract_GEE_values(df):
     # .addBands(flood_dur_mean.rename("flood_dur_mean")) \
 
     results = sampled.getInfo()
-    print(results)
-
 
     extracted = []
     for f in results['features']:
@@ -180,7 +178,7 @@ def extract_GEE_values(df):
             'id': props['id'],
             'land_cover': props.get('Map'),  # land cover code
             'Monthly Surface Solar Radiation (J/m²)': props.get('solar'), # Monthly Surface Solar Radiation (J/m²)
-            'Mean 2m Temperature (K)': props.get('temp'), # Mean 2m Temperature (K)
+            'Mean 2m Temperature (°C)': props.get('temp') - 273.15, # Mean 2m Temperature (K)
             'Mean Monthly Precipitation (m)': props.get('precip'), # Mean Monthly Precipitation (m)
             'Flood Extent History': props.get('flood'), 
             'Mean Flood Depth (m)': props.get('flood_mean'), # Mean Flood Depth (m)
@@ -290,12 +288,12 @@ suitability_colors = {
 #     5: "Wetlands & Water Bodies"
 # }
 
-flood_risk_mapping = {
-    0: "No Risk",
-    1: "Low",
-    2: "Medium",
-    3: "High"
-}
+# flood_risk_mapping = {
+#     0: "No Risk",
+#     1: "Low",
+#     2: "Medium",
+#     3: "High"
+# }
 
 # # Land Cover color mapping (highlighting Tree Cover & Crop Land)
 # land_cover_colors = {
@@ -322,7 +320,7 @@ def assess_suitability(df):
     lambda point: faults_geom.distance(point).min()
     )
 
-    df['Min. Distance to Residential Areas (m)'] = df.geometry.apply(nearest_distance)
+    df['Min. Distance to Residential Areas (m)'] = gdf_points.geometry.apply(nearest_distance)
 
 
     # drop geometry
@@ -391,7 +389,57 @@ def assess_suitability(df):
     # Randomly assign suitability for demonstration
     # df['suitability'] = np.random.choice(suitability_categories, size=len(df))
 
+    def classify_suitability_recoms(row):
+        unsuitable_land_covers = [
+            "Snow/Ice", "Water", "Wetlands", "Mangroves", "Cropland"
+        ]
+        
+        issues = []
+
+        if row['in_protected_area'] or row['in_KBA']:
+            issues.append("In Restricted Area")
+        
+        if row['Flood Extent History'] > 0.4 or row['Mean Flood Depth (m)'] > 0.5 or row['Max Flood Depth (m)'] > 1:
+            issues.append("High Flood Risk")
+
+        if row['Min. Distance to Fault Line (m)'] < 5:
+            issues.append("Near Fault Line")
+
+        if row['Min. Distance to Residential Areas (m)'] < 10:
+            issues.append("Near Residential Areas")
+
+        if row['Monthly Surface Solar Radiation (J/m²)'] < 18000:
+            issues.append("Low Solar Radiation")
+
+        if row['Mean 2m Temperature (°C)'] < 0:
+            issues.append("Low Surface Temperature")
+
+        if row['Mean 2m Temperature (°C)'] > 45:
+            issues.append("High Surface Temperature")
+
+        if row['Mean Monthly Precipitation (m)'] > 0.5:
+            issues.append("High Precipitation")
+
+        if row['Land Cover'] in unsuitable_land_covers:
+            issues.append(f"Land Cover is {row['Land Cover']}")
+
+        if issues:
+            return ['Likely Unsuitable', "; ".join(issues)]
+        else:
+            return ['Suitable', "No major issues detected."]
+
+    
+    df[['Suitability', 'Recommendation']] = df.apply(
+        lambda row: pd.Series(classify_suitability_recoms(row)),
+        axis=1
+    )
+
+    
+
+
     rename_mapping = {
+        'latitude': 'Latitude',
+        'longitude': 'Longitude',
         'in_protected_area': 'In Protected Area?',
         'in_KBA': 'In KBA?',
         # 'FloodRisk_5yr': 'Flood Risk (5-year)',
@@ -412,7 +460,7 @@ def assess_suitability(df):
 if uploaded_file is not None:
     start_time = time.time()
     df = pd.read_csv(uploaded_file)
-    if "latitude" in df.columns and "longitude" in df.columns:
+    if "latitude" in [col.lower() for col in df.columns] and "longitude" in [col.lower() for col in df.columns]:
         st.sidebar.success("✅ File Uploaded Successfully!")
 
         st.sidebar.write("### Querying Location Features...")
@@ -420,14 +468,193 @@ if uploaded_file is not None:
         df_pred = assess_suitability(df)
         st.sidebar.success("✅ Suitability assessment completed!")
 
-        # Function to apply styling
-        def highlight_suitability(val):
-            return suitability_colors.get(val, "")
         
-        # styled_df = df_pred.style.applymap(highlight_suitability, subset=["Suitability"])
+
+        # Function to apply styling
+        # def highlight_suitability_row(row):
+        #     suitability_colors = {
+        #         "Suitable": "background-color: #d4edda",           # Light green
+        #         "Likely Unsuitable": "background-color: #f8d7da",  # Light red
+        #         # "Unsuitable": "background-color: #f5c6cb",         # Deeper red
+        #     }
+
+        #     color = suitability_colors.get(row['Suitability'], '')
+        #     return {
+        #         'Suitability': color,
+        #         'Recommendation': color  # Apply the same color regardless of status
+        #     }
+        
+        # # Define all colors in one place
+        # HIGHLIGHT_COLORS = {
+        #     "unsuitable_feature": "background-color: #f8d7da",  # Light red
+        #     "suitable_feature": "background-color: #d4edda",    # Light green (optional)
+        # }
+
+        # def highlight_unsuitable_features(row):
+        #     highlight = [''] * len(row)
+        #     columns = list(row.index)
+
+        #     # Only process if not Suitable
+        #     if row['Suitability'] == "Suitable":
+        #         return highlight
+
+        #     # Feature-specific conditions
+        #     if "Protected Area" in row['Recommendation']:
+        #         if row.get('in_protected_area', False):
+        #             highlight[columns.index('in_protected_area')] = HIGHLIGHT_COLORS["unsuitable_feature"]
+        #         if row.get('in_KBA', False):
+        #             highlight[columns.index('in_KBA')] = HIGHLIGHT_COLORS["unsuitable_feature"]
+
+        #     if "Flood Risk" in row['Recommendation']:
+        #         flood_thresholds = {
+        #             'Flood Extent History': 0.4,
+        #             'Mean Flood Depth (m)': 0.5,
+        #             'Max Flood Depth (m)': 1.0,
+        #         }
+        #         for col, threshold in flood_thresholds.items():
+        #             if row.get(col, 0) > threshold:
+        #                 highlight[columns.index(col)] = HIGHLIGHT_COLORS["unsuitable_feature"]
+
+        #     if "Near Fault Line" in row['Recommendation']:
+        #         if row.get('Min. Distance to Fault Line (m)', float('inf')) < 5:
+        #             highlight[columns.index('Min. Distance to Fault Line (m)')] = HIGHLIGHT_COLORS["unsuitable_feature"]
+
+        #     if "Near Residential Areas" in row['Recommendation']:
+        #         if row.get('Min. Distance to Residential Areas (m)', float('inf')) < 5:
+        #             highlight[columns.index('Min. Distance to Residential Areas (m)')] = HIGHLIGHT_COLORS["unsuitable_feature"]
+
+        #     if "Low Solar Radiation" in row['Recommendation']:
+        #         if row.get('Monthly Surface Solar Radiation (J/m²)', float('inf')) < 18000:
+        #             highlight[columns.index('Monthly Surface Solar Radiation (J/m²)')] = HIGHLIGHT_COLORS["unsuitable_feature"]
+
+        #     if "Low Surface Temperature" in row['Recommendation']:
+        #         if row.get('Mean 2m Temperature (K)', 0) < 298:
+        #             highlight[columns.index('Mean 2m Temperature (K)')] = HIGHLIGHT_COLORS["unsuitable_feature"]
+
+        #     if "High Surface Temperature" in row['Recommendation']:
+        #         if row.get('Mean 2m Temperature (K)', 0) > 350:
+        #             highlight[columns.index('Mean 2m Temperature (K)')] = HIGHLIGHT_COLORS["unsuitable_feature"]
+
+        #     if "High Precipitation" in row['Recommendation']:
+        #         if row.get('Mean Monthly Precipitation (m)', 0) > 0.5:
+        #             highlight[columns.index('Mean Monthly Precipitation (m)')] = HIGHLIGHT_COLORS["unsuitable_feature"]
+
+        #     if "Land cover is" in row['Recommendation']:
+        #         unsuitable_land_covers = [
+        #             "Built-up", "Snow/Ice", "Water", "Wetlands", "Mangroves", "Tree Cover", "Cropland"
+        #         ]
+        #         if row.get('Land Cover') in unsuitable_land_covers:
+        #             highlight[columns.index('Land Cover')] = HIGHLIGHT_COLORS["unsuitable_feature"]
+
+        #     return highlight
+
+
+
+
+        def highlight_suitability_and_features(row):
+            # Define a dictionary of highlight colors
+            highlight_colors = {
+                'suitable': 'background-color: #d4edda',             # Green-ish
+                'likely_unsuitable': 'background-color: #f8d7da',    # Light red
+                'unsuitable': 'background-color: #f5c6cb',           # Darker red
+                'recommendation_suitable': 'background-color: #d4edda',  # Green-ish for recommendations when suitable
+                'recommendation_unsuitable': 'background-color: #f8d7da',  # Light red for unsuitable recommendations
+                'highlight_affected_feature': 'background-color: #f8d7da'  # Light red for features causing unsuitability
+            }
+
+            # Initialize an empty list for cell styles
+            highlight = [''] * len(row)
+            
+            # Define columns to style
+            columns = list(row.index)
+
+            # Highlight suitability column
+            if row['Suitability'] == 'Suitable':
+                highlight[columns.index('Suitability')] = highlight_colors['suitable']
+            elif row['Suitability'] == 'Likely Unsuitable':
+                highlight[columns.index('Suitability')] = highlight_colors['likely_unsuitable']
+            elif row['Suitability'] == 'Unsuitable':
+                highlight[columns.index('Suitability')] = highlight_colors['unsuitable']
+
+            # Highlight recommendation column based on suitability
+            if row['Suitability'] != 'Suitable':
+                highlight[columns.index('Remarks')] = highlight_colors['recommendation_unsuitable']
+            else:
+                highlight[columns.index('Remarks')] = highlight_colors['recommendation_suitable']
+
+            # Feature-specific highlighting for unsuitable factors
+            if "Restricted Area" in row['Remarks']:
+                if row.get('In Protected Area?', False):
+                    highlight[columns.index('In Protected Area?')] = highlight_colors['highlight_affected_feature']
+                if row.get('In KBA?', False):
+                    highlight[columns.index('In KBA?')] = highlight_colors['highlight_affected_feature']
+
+            if "Flood Risk" in row['Remarks']:
+                flood_thresholds = {
+                    'Flood Extent History': 0.4,
+                    'Mean Flood Depth (m)': 0.5,
+                    'Max Flood Depth (m)': 1.0,
+                }
+                for col, threshold in flood_thresholds.items():
+                    if row.get(col, 0) > threshold:
+                        highlight[columns.index(col)] = highlight_colors['highlight_affected_feature']
+
+            if "Near Fault Line" in row['Remarks']:
+                if row.get('Min. Distance to Fault Line (m)', float('inf')) < 5:
+                    highlight[columns.index('Min. Distance to Fault Line (m)')] = highlight_colors['highlight_affected_feature']
+
+            if "Near Residential Areas" in row['Remarks']:
+                if row.get('Min. Distance to Residential Areas (m)', float('inf')) < 10:
+                    highlight[columns.index('Min. Distance to Residential Areas (m)')] = highlight_colors['highlight_affected_feature']
+
+            if "Low Solar Radiation" in row['Remarks']:
+                if row.get('Monthly Surface Solar Radiation (J/m²)', float('inf')) < 18000:
+                    highlight[columns.index('Monthly Surface Solar Radiation (J/m²)')] = highlight_colors['highlight_affected_feature']
+
+            if "Low Surface Temperature" in row['Remarks']:
+                if row.get('Mean 2m Temperature (°C)', 0) < 0:
+                    highlight[columns.index('Mean 2m Temperature (K)')] = highlight_colors['highlight_affected_feature']
+
+            if "High Surface Temperature" in row['Remarks']:
+                if row.get('Mean 2m Temperature (°C)', 0) > 45:
+                    highlight[columns.index('Mean 2m Temperature (K)')] = highlight_colors['highlight_affected_feature']
+
+            if "High Precipitation" in row['Remarks']:
+                if row.get('Mean Monthly Precipitation (m)', 0) > 0.5:
+                    highlight[columns.index('Mean Monthly Precipitation (m)')] = highlight_colors['highlight_affected_feature']
+
+            if "Land Cover is" in row['Remarks']:
+                unsuitable_land_covers = [
+                    "Snow/Ice", "Water", "Wetlands", "Mangroves", "Cropland"
+                ]
+                if row.get('Land Cover') in unsuitable_land_covers:
+                    highlight[columns.index('Land Cover')] = highlight_colors['highlight_affected_feature']
+
+            return highlight
+
+
+
+        # styled_df = df_pred.style.apply(
+        #     highlight_suitability_row, axis=1, subset=["Suitability", "Recommendation"]
+        # )
+
+        # styled_df = styled_df.style.apply(highlight_unsuitable_features, axis=1)
+
+        cols_to_front = ['Latitude','Longitude','Suitability', 'Recommendation', "In Protected Area?", "In KBA?", 'Land Cover']
+        df_pred = df_pred[cols_to_front + [col for col in df_pred.columns if col not in cols_to_front]]
+
+        df_pred = df_pred.rename(columns={'Recommendation': 'Remarks'})
+
+        styled_df = df_pred.style.apply(highlight_suitability_and_features, axis=1)
+
+        
+
+
+
+
         # Display Table
         st.write("### Extracted Geospatial Data")
-        st.dataframe(df_pred)
+        st.dataframe(styled_df)
         
         # Downloadable CSV
         csv = df_pred.to_csv(index=False).encode("utf-8")
@@ -436,25 +663,32 @@ if uploaded_file is not None:
 
         # Add Markers to Map
         for _, row in df_pred.iterrows():
-            # suitability = row['Suitability']
+            suitability = row['Suitability']
 
-            color = "gray"
+            if suitability == "Suitable":
+                color = "green"
+            else:
+                color = "red"
 
-            # if suitability == "Suitable":
-            #     color = "green"
-            # else:
-            #     color = "red"
-
+            popup_html = (
+                f"<b>Latitude:</b> {row['Latitude']}<br>"
+                f"<b>Longitude:</b> {row['Longitude']}<br>"
+                f"<b>Suitability:</b> {row['Suitability']}<br>"
+                f"<b>Remarks:</b> {row['Remarks']}"
+            )
 
             folium.CircleMarker(
-                location=[row["latitude"], row["longitude"]],
+                location=[row["Latitude"], row["Longitude"]],
                 radius=5,
                 color=color,
                 fill=True,
                 fill_color=color,
                 fill_opacity=0.7,
-                popup=f"Lat: {row['latitude']}, Lon: {row['longitude']}"
+                popup=folium.Popup(popup_html, max_width=300),
             ).add_to(m)
+    
+    else:
+        st.sidebar.error("❌ Please upload a CSV file with 'Latitude' and 'Longitude' columns.")
 
 # Show Map
 m.to_streamlit(height=600)
