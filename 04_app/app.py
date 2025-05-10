@@ -149,7 +149,8 @@ def create_feature_collection(df):
 def extract_GEE_values(df):
     fc_points = create_feature_collection(df)
 
-
+    st.sidebar.write("Getting land cover info...")
+    st.sidebar.write("Extracting info on climate and risk factors...")
 
     sampled = land_cover \
     .addBands(solar.rename("solar")) \
@@ -303,23 +304,26 @@ suitability_colors = {
 
 
 def assess_suitability(df):
+    start_time = time.time()
+
     # Convert DataFrame to GeoDataFrame
     print("Converting DataFrame to GeoDataFrame...")
     geometry = [Point(xy) for xy in zip(df['longitude'], df['latitude'])]
     gdf_points = gpd.GeoDataFrame(df, geometry=geometry, crs="EPSG:4326")
 
     # Extract GEE values
-    print("Extracting GEE values...")
     df = extract_GEE_values(gdf_points)
 
     gdf_points = gdf_points.to_crs(epsg=32651)
 
 
     # Get Min Distance to Fault Lines
+    st.sidebar.write("Calculating distance to nearest fault line...")
     df["Min. Distance to Fault Line (m)"] = gdf_points.geometry.apply(
     lambda point: faults_geom.distance(point).min()
     )
 
+    st.sidebar.write("Calculating distance to nearest residential area...")
     df['Min. Distance to Residential Areas (m)'] = gdf_points.geometry.apply(nearest_distance)
 
 
@@ -327,7 +331,7 @@ def assess_suitability(df):
     df = df.drop(columns=['geometry'])
 
     # Check if points are inside protected areas
-    print("Checking if points are inside protected areas...")
+    st.sidebar.write("Checking for restricted areas...")
     gdf_points["in_protected_area"] = gdf_points.sjoin(gdf_protected, how="left", predicate="intersects")['index_right'].notnull()
     gdf_points["in_KBA"] = gdf_points.sjoin(gdf_kba, how="left", predicate="intersects")['index_right'].notnull()
 
@@ -344,7 +348,7 @@ def assess_suitability(df):
     # gdf_points = gdf_points.sjoin(gdf_flood_25[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_25'}).drop(columns=['index_right'], errors='ignore')
     # gdf_points = gdf_points.sjoin(gdf_flood_100[['geometry', 'FloodRisk']], how="left", predicate="intersects").fillna({'FloodRisk': 0}).rename(columns={'FloodRisk': 'FloodRisk_100'}).drop(columns=['index_right'], errors='ignore')
 
-    st.sidebar.success("✅ Features retrieved successfully!")
+    st.sidebar.success(f"Features retrieved in {time.time() - start_time:.2f} seconds")
 
 
 
@@ -460,7 +464,18 @@ def assess_suitability(df):
 if uploaded_file is not None:
     start_time = time.time()
     df = pd.read_csv(uploaded_file)
-    if "latitude" in [col.lower() for col in df.columns] and "longitude" in [col.lower() for col in df.columns]:
+
+    # Create a lowercase-to-original mapping
+    col_map = {col.lower(): col for col in df.columns}
+
+    # Rename if needed
+    if 'latitude' in col_map and 'longitude' in col_map:
+        df = df.rename(columns={
+            col_map['latitude']: 'latitude',
+            col_map['longitude']: 'longitude'
+        })
+
+    if 'latitude' in df.columns and 'longitude' in df.columns:
         st.sidebar.success("✅ File Uploaded Successfully!")
 
         st.sidebar.write("### Querying Location Features...")
