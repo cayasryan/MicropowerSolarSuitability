@@ -29,9 +29,25 @@ st.set_page_config(layout="wide")
 st.title("SolMate")
 st.subheader("Your smart companion for solar site assessment.")
 
+service_account_info = {
+    "type": st.secrets["earthengine"]["type"],
+    "project_id": st.secrets["earthengine"]["project_id"],
+    "private_key_id": st.secrets["earthengine"]["private_key_id"],
+    "private_key": st.secrets["earthengine"]["private_key"],
+    "client_email": st.secrets["earthengine"]["client_email"],
+    "client_id": st.secrets["earthengine"]["client_id"],
+    "auth_uri": st.secrets["earthengine"]["auth_uri"],
+    "token_uri": st.secrets["earthengine"]["token_uri"],
+    "auth_provider_x509_cert_url": st.secrets["earthengine"]["auth_provider_x509_cert_url"],
+    "client_x509_cert_url": st.secrets["earthengine"]["client_x509_cert_url"],
+    "universe_domain": st.secrets["earthengine"]["universe_domain"]
+}
+
+credentials = ee.ServiceAccountCredentials(service_account_info["client_email"], key_data=service_account_info)
+
 # Initialize Earth Engine
 try:
-    ee.Initialize(project="micropower-app")
+    ee.Initialize(credentials)
 except Exception as e:
     st.error(f"Error initializing Earth Engine: {e}")
 
