@@ -363,12 +363,38 @@ def assess_suitability(df):
     joined_gdf = joined_gdf[~joined_gdf.index.duplicated(keep='first')]
     gdf_points["in_protected_area"] = joined_gdf['index_right'].notnull()
 
+    # Calculate distance to the nearest protected area and get its name
+    st.sidebar.write("Calculating distance to nearest protected area...")
+    def get_nearest_protected_area(point):
+        if point is None or point.is_empty:
+            return pd.Series([np.nan, np.nan])
+        distances = gdf_protected.geometry.distance(point)
+        nearest_idx = distances.idxmin()  # Get the index of the nearest protected area
+        nearest_name = gdf_protected.loc[nearest_idx, 'NAME'] if not pd.isnull(nearest_idx) else np.nan
+        nearest_distance = distances.min() if not pd.isnull(nearest_idx) else np.nan
+        return pd.Series([nearest_distance, nearest_name])
+
+    gdf_points[['distance_to_protected_area', 'nearest_protected_area_name']] = gdf_points.geometry.apply(get_nearest_protected_area)
+
 
     gdf_points = gdf_points.reset_index(drop=True)
     joined_gdf = gdf_points.sjoin(gdf_kba, how="left", predicate="intersects")
     joined_gdf = joined_gdf.sort_values(by='index_right', ascending=False)
     joined_gdf = joined_gdf[~joined_gdf.index.duplicated(keep='first')]
     gdf_points["in_KBA"] = joined_gdf['index_right'].notnull()
+
+    st.sidebar.write("Calculating distance to key biodiversity area...")
+    def get_nearest_protected_area(point):
+        if point is None or point.is_empty:
+            return pd.Series([np.nan, np.nan])
+        distances = gdf_kba.geometry.distance(point)
+        nearest_idx = distances.idxmin()  # Get the index of the nearest protected area
+        nearest_name = gdf_kba.loc[nearest_idx, 'NatName'] if not pd.isnull(nearest_idx) else np.nan
+        nearest_distance = distances.min() if not pd.isnull(nearest_idx) else np.nan
+        return pd.Series([nearest_distance, nearest_name])
+
+    gdf_points[['distance_to_KBA', 'nearest_KBA_name']] = gdf_points.geometry.apply(get_nearest_protected_area)
+
 
 
     # Get land cover type (assuming land cover GeoDataFrame has a 'land_type' column)
@@ -413,7 +439,11 @@ def assess_suitability(df):
 
     # Convert 'in_predicted_area' to 1/0
     df['in_protected_area'] = gdf_points['in_protected_area']
+    df['distance_to_protected_area'] = gdf_points['distance_to_protected_area']
+    df['nearest_protected_area_name'] = gdf_points['nearest_protected_area_name']
     df['in_KBA'] = gdf_points['in_KBA']
+    df['distance_to_KBA'] = gdf_points['distance_to_KBA']
+    df['nearest_KBA_name'] = gdf_points['nearest_KBA_name']
 
     # Get Flood Risk
     # df['FloodRisk_5yr'] = gdf_points['FloodRisk_5'].astype(int).map(flood_risk_mapping)
@@ -480,7 +510,11 @@ def assess_suitability(df):
         'latitude': 'Latitude',
         'longitude': 'Longitude',
         'in_protected_area': 'In Protected Area?',
+        'distance_to_protected_area': 'Min. Distance to Protected Area (m)',
+        'nearest_protected_area_name': 'Nearest Protected Area',
         'in_KBA': 'In KBA?',
+        'distance_to_KBA': 'Min. Distance to KBA (m)',
+        'nearest_KBA_name': 'Nearest KBA'
         # 'FloodRisk_5yr': 'Flood Risk (5-year)',
         # 'FloodRisk_25yr': 'Flood Risk (25-year)',
         # 'FloodRisk_100yr': 'Flood Risk (100-year)',
@@ -514,6 +548,9 @@ if uploaded_file is not None:
         st.sidebar.success("✅ File Uploaded Successfully!")
 
         st.sidebar.write("### Querying Location Features...")
+
+        original_df = df.copy()
+        df = df[['latitude', 'longitude']]
 
         df_pred = assess_suitability(df)
         st.sidebar.success("✅ Suitability assessment completed!")
@@ -702,12 +739,18 @@ if uploaded_file is not None:
 
         # styled_df = styled_df.style.apply(highlight_unsuitable_features, axis=1)
 
-        cols_to_front = ['Latitude','Longitude','Suitability', 'Recommendation', "In Protected Area?", "In KBA?", 'Land Cover']
-        df_pred = df_pred[cols_to_front + [col for col in df_pred.columns if col not in cols_to_front]]
+        cols_to_front = ['Suitability', 'Recommendation', "Land Cover",
+                         "In Protected Area?", "Min. Distance to Protected Area (m)", "Nearest Protected Area",
+                         "In KBA?", "Min. Distance to KBA (m)", "Nearest KBA",]
+        pred_cols = df_pred[cols_to_front + [col for col in df_pred.columns if col not in cols_to_front]].drop(columns=['Latitude', 'Longitude'])
 
-        df_pred = df_pred.rename(columns={'Recommendation': 'Remarks'})
+        df_final = pd.concat([df_pred[['Latitude', 'Longitude']],
+                            original_df.drop(columns=['latitude', 'longitude']),
+                            pred_cols], axis=1)
 
-        styled_df = df_pred.style.apply(highlight_suitability_and_features, axis=1)
+        df_final = df_final.rename(columns={'Recommendation': 'Remarks'})
+
+        styled_df = df_final.style.apply(highlight_suitability_and_features, axis=1)
 
         
 
@@ -716,12 +759,12 @@ if uploaded_file is not None:
         st.dataframe(styled_df)
         
         # Downloadable CSV
-        csv = df_pred.to_csv(index=False).encode("utf-8")
+        csv = df_final.to_csv(index=False).encode("utf-8")
         st.download_button("Download CSV", csv, "solar_suitability.csv", "text/csv")
 
 
         # Add Markers to Map
-        for _, row in df_pred.iterrows():
+        for _, row in df_final.iterrows():
             suitability = row['Suitability']
 
             if suitability == "Suitable":
