@@ -78,6 +78,7 @@ start_time = time.time()
 gdf_protected = dgpd.read_parquet("01_processed_data/protected_areas_reprojected.parquet").compute()
 gdf_kba = gpd.read_file("01_processed_data/philippines_kba.geojson")
 gdf_spug = gpd.read_file("01_processed_data/philippines_spug.geojson")
+gdf_airports = gpd.read_file("01_processed_data/philippines_airports.geojson")
 
 # gdf_landcover = dgpd.read_parquet("../01_processed_data/land_cover_reprojected.parquet").compute()
 # gdf_flood_5 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_5yr_reprojected.parquet").compute()
@@ -86,30 +87,47 @@ gdf_spug = gpd.read_file("01_processed_data/philippines_spug.geojson")
 
 faults_geom = gpd.read_file("01_processed_data/faults_ph_geometry.geojson")
 
+# gdf_power_line = gpd.read_file("01_processed_data/philippines_power_lines.geojson")
+gdf_grid = gpd.read_file("01_processed_data/philippines_grid.geojson")
+
 residential_1 = gpd.read_file("01_processed_data/residential_areas_part1.geojson")
 residential_2 = gpd.read_file("01_processed_data/residential_areas_part2.geojson")
 residential = pd.concat([residential_1, residential_2], ignore_index=True)
 
+main_roads_1 = gpd.read_file("01_processed_data/philippines_main_roads_1.geojson")
+main_roads_2 = gpd.read_file("01_processed_data/philippines_main_roads_2.geojson")
+gdf_main_roads = pd.concat([main_roads_1, main_roads_2], ignore_index=True)
 
-land_cover = ee.ImageCollection("ESA/WorldCover/v200").first()
+common_crs = 'EPSG:4326'
+common_scale = 10
+
+land_cover = ee.ImageCollection("ESA/WorldCover/v200").first().reproject(crs=common_crs, scale=common_scale)
 
 # Climate Datasets
-solar = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("surface_solar_radiation_downwards_sum").mean()
-temp = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("temperature_2m").mean()
-precip = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("total_precipitation_sum").mean()
+solar = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("surface_solar_radiation_downwards_sum").mean().reproject(crs=common_crs, scale=common_scale)
+temp = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("temperature_2m").mean().reproject(crs=common_crs, scale=common_scale)
+precip = ee.ImageCollection("ECMWF/ERA5_LAND/MONTHLY_AGGR").select("total_precipitation_sum").mean().reproject(crs=common_crs, scale=common_scale)
+
+# Load SRTM elevation data
+srtm = ee.Image('USGS/SRTMGL1_003')
+
+# Calculate terrain derivatives (slope, aspect, etc.)
+terrain = ee.Terrain.products(srtm).reproject(crs=common_crs, scale=common_scale)
 
 # Flood Data
 flood_collection = ee.ImageCollection("GLOBAL_FLOOD_DB/MODIS_EVENTS/V1") \
     .select("flooded") \
     .map(lambda img: img.unmask(0))  # Replace null/masked values with 0
 
-flood = flood_collection.sum()# flood_depth = ee.ImageCollection("JRC/CEMS_GLOFAS/FloodHazard/v1").select("depth").mean()
+flood = flood_collection.sum().reproject(crs=common_crs, scale=common_scale)
+
+# flood_depth = ee.ImageCollection("JRC/CEMS_GLOFAS/FloodHazard/v1").select("depth").mean()
 
 flood_depth_collection = ee.ImageCollection("JRC/CEMS_GLOFAS/FloodHazard/v1") \
     .select("depth") \
     .map(lambda img: img.unmask(0))  # Replace null/masked values with 0
-flood_depth_mean = flood_depth_collection.mean()
-flood_depth_max = flood_depth_collection.max()
+flood_depth_mean = flood_depth_collection.mean().reproject(crs=common_crs, scale=common_scale)
+flood_depth_max = flood_depth_collection.max().reproject(crs=common_crs, scale=common_scale)
 
 # flood_depth = ee.ImageCollection("JRC/CEMS_GLOFAS/FloodHazard/v1").select("depth").max()
 
@@ -144,7 +162,7 @@ st.sidebar.success(f"Data loaded in {time.time() - start_time:.2f} seconds")
 
 
 
-# PROCESS RESIDENTIAL AREAS ------------------------------------------------------------------------------------------------------------------------------------
+# PROCESS RESIDENTIAL AREAS, AIRPORTS, MAIN ROADS ------------------------------------------------------------------------------------------------------------------------------------
 
 # Create a spatial index from residential geometries
 res_geom_list = list(residential.geometry.values)  # ensure it's a plain list of geometries
@@ -156,6 +174,34 @@ def nearest_distance(site_geom):
         return np.nan
     nearest_idx = res_tree.nearest(site_geom)
     nearest_geom = res_tree.geometries.take(nearest_idx)
+
+    return site_geom.distance(nearest_geom)
+
+
+# Create a spatial index from airport geometries
+air_geom_list = list(gdf_airports.geometry.values)  # ensure it's a plain list of geometries
+air_tree = STRtree(air_geom_list)
+
+# For each site, find the nearest airport polygon and compute distance
+def nearest_distance_airport(site_geom):
+    if site_geom is None or site_geom.is_empty:
+        return np.nan
+    nearest_idx = air_tree.nearest(site_geom)
+    nearest_geom = air_tree.geometries.take(nearest_idx)
+
+    return site_geom.distance(nearest_geom)
+
+
+# Create a spatial index from main road geometries
+road_geom_list = list(gdf_main_roads.geometry.values)  # ensure it's a plain list of geometries
+road_tree = STRtree(road_geom_list)
+
+# For each site, find the nearest road polygon and compute distance
+def nearest_distance_roads(site_geom):
+    if site_geom is None or site_geom.is_empty:
+        return np.nan
+    nearest_idx = road_tree.nearest(site_geom)
+    nearest_geom = road_tree.geometries.take(nearest_idx)
 
     return site_geom.distance(nearest_geom)
 
@@ -172,6 +218,33 @@ def create_feature_collection(df):
     return ee.FeatureCollection(features)
 
 
+# Function to extract values per point with reduceRegion (allows nulls)
+def extract_bands_to_feature(point):
+    reducers = ee.Reducer.first()  # or ee.Reducer.mean() if you want averaging
+
+    # Combine all the bands into a single image
+    combined = land_cover \
+        .addBands(solar.rename("solar")) \
+        .addBands(temp.rename("temp")) \
+        .addBands(precip.rename("precip")) \
+        .addBands(flood.rename("flood")) \
+        .addBands(flood_depth_mean.rename("flood_mean")) \
+        .addBands(flood_depth_max.rename("flood_max")) \
+        .addBands(terrain.select("slope").rename("slope")) \
+        .addBands(terrain.select("elevation").rename("elevation"))
+
+    # Reduce each image at the point
+    sampled = combined.reduceRegion(
+        reducer=reducers,
+        geometry=point.geometry(),
+        scale=10,
+        maxPixels=1e13
+    )
+
+    # Return the point with added properties (some may be null)
+    return point.set(sampled)
+
+
 # Extract Feature Data Function
 def extract_GEE_values(df):
     fc_points = create_feature_collection(df)
@@ -179,23 +252,9 @@ def extract_GEE_values(df):
     st.sidebar.write("Getting land cover info...")
     st.sidebar.write("Extracting info on climate and risk factors...")
 
-    sampled = land_cover \
-    .addBands(solar.rename("solar")) \
-    .addBands(temp.rename("temp")) \
-    .addBands(precip.rename("precip")) \
-    .addBands(flood.rename("flood")) \
-    .addBands(flood_depth_mean.rename("flood_mean")) \
-    .addBands(flood_depth_max.rename("flood_max")) \
-    .sampleRegions(collection=fc_points, scale=10, geometries=True)
+    # Apply to all points
+    sampled = fc_points.map(extract_bands_to_feature)
 
-
-    # .addBands(flood_depth_mean.rename("flood_mean")) \
-    # .addBands(flood_depth_max.rename("flood_max")) \
-
-     # .addBands(flood_max.rename("flood_max")) \
-    # .addBands(flood_mean.rename("flood_mean")) \
-    # .addBands(flood_dur_max.rename("flood_dur_max")) \
-    # .addBands(flood_dur_mean.rename("flood_dur_mean")) \
 
     results = sampled.getInfo()
 
@@ -205,8 +264,10 @@ def extract_GEE_values(df):
         extracted.append({
             'id': props['id'],
             'land_cover': props.get('Map'),  # land cover code
-            'Monthly Surface Solar Radiation (J/m²)': props.get('solar'), # Monthly Surface Solar Radiation (J/m²)
-            'Mean 2m Temperature (°C)': props.get('temp') - 273.15, # Mean 2m Temperature (K)
+            'Slope (deg)': props.get('slope'), # Slope (degrees)
+            'Elevation (m)': props.get('elevation'), # Elevation (m)
+            'Monthly Surface Solar Radiation (J/m²)': props.get('solar') if props.get('solar') > 5 else None, # Monthly Surface Solar Radiation (J/m²)
+            'Mean 2m Temperature (°C)': props.get('temp') - 273.15 if props.get('temp') is not None else None, # Mean 2m Temperature (K)
             'Mean Monthly Precipitation (m)': props.get('precip'), # Mean Monthly Precipitation (m)
             'Flood Extent History': props.get('flood'), 
             'Mean Flood Depth (m)': props.get('flood_mean'), # Mean Flood Depth (m)
@@ -350,8 +411,29 @@ def assess_suitability(df):
     lambda point: faults_geom.distance(point).min()
     )
 
+    # Get Min Distance to Grid Feature
+    # st.sidebar.write("Calculating grid proximity...")
+    # df["Min. Distance to Power Line (m)"] = gdf_points.geometry.apply(
+    # lambda point: gdf_power_line.distance(point).min()
+    # )
+
+    # df["Grid Proximity (m)"] = gdf_points.geometry.apply(
+    # lambda point: gdf_grid.distance(point).min()
+    # )
+
+
+
     st.sidebar.write("Calculating distance to nearest residential area...")
     df['Min. Distance to Residential Areas (m)'] = gdf_points.geometry.apply(nearest_distance)
+
+
+    # Get Min Distance to Airports
+    st.sidebar.write("Calculating distance to nearest airport...")
+    df["Min. Distance to Airport (m)"] = gdf_points.geometry.apply(nearest_distance_airport)
+
+    # Get Min Distance to Main Roads
+    st.sidebar.write("Calculating distance to nearest main road...")
+    df["Min. Distance to Main Road (m)"] = gdf_points.geometry.apply(nearest_distance_roads)
 
 
     # drop geometry
@@ -396,6 +478,23 @@ def assess_suitability(df):
         return pd.Series([nearest_distance, nearest_name])
 
     gdf_points[['distance_to_KBA', 'nearest_KBA_name']] = gdf_points.geometry.apply(get_nearest_kba)
+
+
+    st.sidebar.write("Calculating grid proximity...")
+    def get_nearest_grid(point):
+        if point is None or point.is_empty:
+            return pd.Series([np.nan, np.nan])
+        distances = gdf_grid.geometry.distance(point)
+        nearest_idx = distances.idxmin()  # Get the index of the nearest protected area
+        nearest_name = gdf_grid.loc[nearest_idx, 'power'] if not pd.isnull(nearest_idx) else np.nan
+        if nearest_name == "generator":
+            nearest_name = f'{nearest_name} ({gdf_grid.loc[nearest_idx, 'generator:method']})' if not pd.isnull(gdf_grid.loc[nearest_idx, 'generator:method']) else 'generator'
+        nearest_distance = distances.min() if not pd.isnull(nearest_idx) else np.nan
+        return pd.Series([nearest_distance, nearest_name])
+
+    gdf_points[['distance_to_grid', 'nearest_grid_type']] = gdf_points.geometry.apply(get_nearest_grid)
+
+
 
 
     st.sidebar.write("Checking for SPUG areas...")
@@ -466,9 +565,12 @@ def assess_suitability(df):
     df['in_KBA'] = gdf_points['in_KBA']
     df['distance_to_KBA'] = gdf_points['distance_to_KBA']
     df['nearest_KBA_name'] = gdf_points['nearest_KBA_name']
+    df['distance_to_grid'] = gdf_points['distance_to_grid']
+    df['nearest_grid_type'] = gdf_points['nearest_grid_type']
     df['in_SPUG'] = gdf_points['in_SPUG']
     df['distance_to_SPUG'] = gdf_points['distance_to_SPUG']
     df['nearest_SPUG_name'] = gdf_points['nearest_SPUG_name']
+ 
 
     # Get Flood Risk
     # df['FloodRisk_5yr'] = gdf_points['FloodRisk_5'].astype(int).map(flood_risk_mapping)
@@ -540,6 +642,8 @@ def assess_suitability(df):
         'in_KBA': 'In KBA?',
         'distance_to_KBA': 'Min. Distance to KBA (m)',
         'nearest_KBA_name': 'Nearest KBA',
+        'distance_to_grid': 'Grid Proximity (m)',
+        'nearest_grid_type': 'Nearest Grid Type',
         'in_SPUG': 'In SPUG Area?',
         'distance_to_SPUG': 'Min. Distance to SPUG Area (m)',
         'nearest_SPUG_name': 'Nearest SPUG Area',
@@ -770,9 +874,12 @@ if uploaded_file is not None:
         cols_to_front = ['Suitability', 'Recommendation', "Land Cover",
                          "In Protected Area?", "Min. Distance to Protected Area (m)", "Nearest Protected Area",
                          "In KBA?", "Min. Distance to KBA (m)", "Nearest KBA",
+                         'Grid Proximity (m)', 'Nearest Grid Type',
                          "In SPUG Area?", "Min. Distance to SPUG Area (m)", "Nearest SPUG Area",
                          'Min. Distance to Residential Areas (m)',
-                         'Min. Distance to Fault Line (m)',]
+                         'Min. Distance to Main Road (m)',
+                         'Min. Distance to Airport (m)',
+                         'Min. Distance to Fault Line (m)']
         pred_cols = df_pred[cols_to_front + [col for col in df_pred.columns if col not in cols_to_front]].drop(columns=['Latitude', 'Longitude'])
 
         df_final = pd.concat([df_pred[['Latitude', 'Longitude']],
