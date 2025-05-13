@@ -20,10 +20,8 @@ import geemap.foliumap as geemap
 import geopandas as gpd
 import dask_geopandas as dgpd
 from shapely.geometry import Point
-import geopandas as gpd
 
 from shapely.strtree import STRtree
-import numpy as np
 
 
 
@@ -142,16 +140,16 @@ flood_depth_max = flood_depth_collection.max().reproject(crs=common_crs, scale=c
 
 ### LOAD AND PROCESS FLOOD RISK FILES -------------------------------------------------------------
 
-def merge_parquet_folder(folder_path):
-    # Get all .parquet files in the folder
-    parquet_files = sorted(glob(os.path.join(folder_path, "*.parquet")))
+# def merge_parquet_folder(folder_path):
+#     # Get all .parquet files in the folder
+#     parquet_files = sorted(glob(os.path.join(folder_path, "*.parquet")))
 
-    # Use list comprehension to read each file into a GeoDataFrame
-    gdfs = [gpd.read_parquet(f) for f in parquet_files]
+#     # Use list comprehension to read each file into a GeoDataFrame
+#     gdfs = [gpd.read_parquet(f) for f in parquet_files]
 
-    # Concatenate into one GeoDataFrame
-    merged_gdf = gpd.GeoDataFrame(pd.concat(gdfs, ignore_index=True), crs=gdfs[0].crs)
-    return merged_gdf
+#     # Concatenate into one GeoDataFrame
+#     merged_gdf = gpd.GeoDataFrame(pd.concat(gdfs, ignore_index=True), crs=gdfs[0].crs)
+#     return merged_gdf
 
 # gdf_flood_5 = merge_parquet_folder("01_processed_data/flood_5_split_parquet")
 # gdf_flood_25 = merge_parquet_folder("01_processed_data/flood_25_split_parquet")
@@ -487,8 +485,6 @@ def assess_suitability(df):
         distances = gdf_grid.geometry.distance(point)
         nearest_idx = distances.idxmin()  # Get the index of the nearest protected area
         nearest_name = gdf_grid.loc[nearest_idx, 'power'] if not pd.isnull(nearest_idx) else np.nan
-        if nearest_name == "generator":
-            nearest_name = f'{nearest_name} ({gdf_grid.loc[nearest_idx, 'generator:method']})' if not pd.isnull(gdf_grid.loc[nearest_idx, 'generator:method']) else 'generator'
         nearest_distance = distances.min() if not pd.isnull(nearest_idx) else np.nan
         return pd.Series([nearest_distance, nearest_name])
 
