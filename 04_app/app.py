@@ -77,6 +77,8 @@ st.sidebar.write("### Loading datasets...")
 start_time = time.time()
 gdf_protected = dgpd.read_parquet("01_processed_data/protected_areas_reprojected.parquet").compute()
 gdf_kba = gpd.read_file("01_processed_data/philippines_kba.geojson")
+gdf_spug = gpd.read_file("01_processed_data/philippines_spug.geojson")
+
 # gdf_landcover = dgpd.read_parquet("../01_processed_data/land_cover_reprojected.parquet").compute()
 # gdf_flood_5 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_5yr_reprojected.parquet").compute()
 # gdf_flood_25 = dgpd.read_parquet("../01_processed_data/flood_risk/FloodRisk_25yr_reprojected.parquet").compute()
@@ -384,7 +386,7 @@ def assess_suitability(df):
     gdf_points["in_KBA"] = joined_gdf['index_right'].notnull()
 
     st.sidebar.write("Calculating distance to key biodiversity area...")
-    def get_nearest_protected_area(point):
+    def get_nearest_kba(point):
         if point is None or point.is_empty:
             return pd.Series([np.nan, np.nan])
         distances = gdf_kba.geometry.distance(point)
@@ -393,9 +395,29 @@ def assess_suitability(df):
         nearest_distance = distances.min() if not pd.isnull(nearest_idx) else np.nan
         return pd.Series([nearest_distance, nearest_name])
 
-    gdf_points[['distance_to_KBA', 'nearest_KBA_name']] = gdf_points.geometry.apply(get_nearest_protected_area)
+    gdf_points[['distance_to_KBA', 'nearest_KBA_name']] = gdf_points.geometry.apply(get_nearest_kba)
 
 
+    st.sidebar.write("Checking for SPUG areas...")
+    gdf_points = gdf_points.reset_index(drop=True)
+    joined_gdf = gdf_points.sjoin(gdf_spug, how="left", predicate="intersects")
+    joined_gdf = joined_gdf.sort_values(by='index_right', ascending=False)
+    joined_gdf = joined_gdf[~joined_gdf.index.duplicated(keep='first')]
+    gdf_points["in_SPUG"] = joined_gdf['index_right'].notnull()
+
+    st.sidebar.write("Calculating distance to nearest SPUG area...")
+    def get_nearest_spug_area(point):
+        if point is None or point.is_empty:
+            return pd.Series([np.nan, np.nan])
+        distances = gdf_spug.geometry.distance(point)
+        nearest_idx = distances.idxmin()  # Get the index of the nearest protected area
+        nearest_name = gdf_spug.loc[nearest_idx, 'adm4_en'] if not pd.isnull(nearest_idx) else np.nan
+        nearest_distance = distances.min() if not pd.isnull(nearest_idx) else np.nan
+        return pd.Series([nearest_distance, nearest_name])
+
+    gdf_points[['distance_to_SPUG', 'nearest_SPUG_name']] = gdf_points.geometry.apply(get_nearest_spug_area)
+
+    
 
     # Get land cover type (assuming land cover GeoDataFrame has a 'land_type' column)
     # print("Getting land cover type...")
@@ -444,6 +466,9 @@ def assess_suitability(df):
     df['in_KBA'] = gdf_points['in_KBA']
     df['distance_to_KBA'] = gdf_points['distance_to_KBA']
     df['nearest_KBA_name'] = gdf_points['nearest_KBA_name']
+    df['in_SPUG'] = gdf_points['in_SPUG']
+    df['distance_to_SPUG'] = gdf_points['distance_to_SPUG']
+    df['nearest_SPUG_name'] = gdf_points['nearest_SPUG_name']
 
     # Get Flood Risk
     # df['FloodRisk_5yr'] = gdf_points['FloodRisk_5'].astype(int).map(flood_risk_mapping)
@@ -514,7 +539,10 @@ def assess_suitability(df):
         'nearest_protected_area_name': 'Nearest Protected Area',
         'in_KBA': 'In KBA?',
         'distance_to_KBA': 'Min. Distance to KBA (m)',
-        'nearest_KBA_name': 'Nearest KBA'
+        'nearest_KBA_name': 'Nearest KBA',
+        'in_SPUG': 'In SPUG Area?',
+        'distance_to_SPUG': 'Min. Distance to SPUG Area (m)',
+        'nearest_SPUG_name': 'Nearest SPUG Area',
         # 'FloodRisk_5yr': 'Flood Risk (5-year)',
         # 'FloodRisk_25yr': 'Flood Risk (25-year)',
         # 'FloodRisk_100yr': 'Flood Risk (100-year)',
@@ -741,7 +769,10 @@ if uploaded_file is not None:
 
         cols_to_front = ['Suitability', 'Recommendation', "Land Cover",
                          "In Protected Area?", "Min. Distance to Protected Area (m)", "Nearest Protected Area",
-                         "In KBA?", "Min. Distance to KBA (m)", "Nearest KBA",]
+                         "In KBA?", "Min. Distance to KBA (m)", "Nearest KBA",
+                         "In SPUG Area?", "Min. Distance to SPUG Area (m)", "Nearest SPUG Area",
+                         'Min. Distance to Residential Areas (m)',
+                         'Min. Distance to Fault Line (m)',]
         pred_cols = df_pred[cols_to_front + [col for col in df_pred.columns if col not in cols_to_front]].drop(columns=['Latitude', 'Longitude'])
 
         df_final = pd.concat([df_pred[['Latitude', 'Longitude']],
