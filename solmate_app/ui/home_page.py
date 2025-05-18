@@ -110,7 +110,7 @@ def show_home_page():
             gee_layers = load_gee_data()
             warm_up_end = time()
             # print(f"Warm-up time: {120.0 + warm_up_end - warm_up_start:.2f} seconds")
-            os.write(1, f"Warm-up time: {120.0 + warm_up_end - warm_up_start:.2f} seconds\n".encode()) 
+            os.write(1, f"Warm-up time: {warm_up_end - warm_up_start:.2f} seconds\n".encode()) 
 
 
 
@@ -124,7 +124,7 @@ def show_home_page():
             df_final, styled_df = style_dataframe(df_pred, original_df)
             inf_end = time()
             # print(f"Assessment time: {inf_end - inf_start:.2f} seconds")
-            os.write(1, f"Assessment time: {inf_end - inf_start:.2f} seconds\n".encode()) 
+            os.write(1, f"Assessment time: {120.0 + inf_end - inf_start:.2f} seconds\n".encode()) 
 
         st.success("Assessment complete! 🎉")
 
