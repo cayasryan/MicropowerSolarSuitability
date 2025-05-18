@@ -1,7 +1,7 @@
 import streamlit as st
 
-from solmate_app.ui.home_page import show_home_page
-from solmate_app.ui.results_page import show_results_page
+from .ui.home_page import show_home_page
+from .ui.results_page import show_results_page
 
 st.set_page_config(
     page_title="SolMate – Solar Site Assessment Tool",
