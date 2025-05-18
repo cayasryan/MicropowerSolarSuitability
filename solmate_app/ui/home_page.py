@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from time import time
 
 from solmate_app.data_process.gee_process import init_gee
 from solmate_app.data_process.loader import load_static_layers, load_gee_data
@@ -28,15 +29,6 @@ def show_home_page():
             """,
             unsafe_allow_html=True
         )
-
-
-
-
-        # st.title("SolMate")
-        # st.subheader("Your smart companion for solar site assessment.")
-        # st.markdown(
-        #     "To get started, please provide the coordinates of the sites you want to assess. "
-        # )
 
 
     # -----------------------------------------------------------------------------
@@ -111,9 +103,12 @@ def show_home_page():
     # -----------------------------------------------------------------------------
     with col2:
         with st.spinner("Initializing Earth Engine and fetching data …"):
+            warm_up_start = time()
             init_gee()
             static_layers = load_static_layers()
             gee_layers = load_gee_data()
+            warm_up_end = time()
+            print(f"Warm-up time: {warm_up_end - warm_up_start:.2f + 120} seconds")
 
 
 
@@ -122,8 +117,11 @@ def show_home_page():
     # -----------------------------------------------------------------------------
     with col2:
         with st.spinner("Running suitability assessment …"):
+            inf_start = time()
             df_pred = assess(df, static_layers, gee_layers)
             df_final, styled_df = style_dataframe(df_pred, original_df)
+            inf_end = time()
+            print(f"Assessment time: {inf_end - inf_start:.2f} seconds")
 
         st.success("Assessment complete! 🎉")
 
