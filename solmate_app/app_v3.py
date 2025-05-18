@@ -1,7 +1,11 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
 import streamlit as st
 
-from .ui.home_page import show_home_page
-from .ui.results_page import show_results_page
+from solmate_app.ui.home_page import show_home_page
+from solmate_app.ui.results_page import show_results_page
 
 st.set_page_config(
     page_title="SolMate – Solar Site Assessment Tool",
