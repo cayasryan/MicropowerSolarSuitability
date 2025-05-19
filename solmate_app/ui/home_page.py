@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from time import time
 import os
-# from PIL import Image
 
 from solmate_app.data_process.gee_process import init_gee
 from solmate_app.data_process.loader import load_static_layers, load_gee_data
