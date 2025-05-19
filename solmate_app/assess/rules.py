@@ -9,7 +9,8 @@ def classify(df):
         if row['in_protected_area'] == "Yes":
             issues.append("In Protected Area")
         
-        if pd.notnull(row['flood']) and row['flood'] > THRESH['flood_extent'] \
+        if pd.notnull(row['flood_occur']) and row['flood_occur'] > THRESH['flood_extent'] \
+            or pd.notnull(row['flood_duration']) and row['flood_duration'] > THRESH['flood_duration'] \
            or pd.notnull(row['flood_mean']) and row['flood_mean'] > THRESH['flood_mean'] \
            or pd.notnull(row['flood_max']) and row['flood_max'] > THRESH['flood_max']:
             issues.append("High Flood Risk")

@@ -22,7 +22,8 @@ def highlight_suitability_and_features(row):
     # Feature-based highlights
     checks = [
         (col('in_protected_area'), lambda v: v == 'Yes'),
-        (col('flood'), lambda v: v > THRESH['flood_extent']),
+        (col('flood_occur'), lambda v: v > THRESH['flood_extent']),
+        (col('flood_duration'), lambda v: v > THRESH['flood_duration']),
         (col('flood_mean'), lambda v: v > THRESH['flood_mean']),
         (col('flood_max'), lambda v: v > THRESH['flood_max']),
         (col('fault_line_prox'), lambda v: v < THRESH['fault_dist']),

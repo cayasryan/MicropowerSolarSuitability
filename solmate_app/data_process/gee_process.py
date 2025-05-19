@@ -39,7 +39,8 @@ def make_extractor(gee_data):
         solar = gee_data['solar']
         temp = gee_data['temp']
         precip = gee_data['precip']
-        flood = gee_data['flood']
+        flood_occur = gee_data['flood_occur']
+        flood_duration_mean = gee_data['flood_duration_mean']
         flood_depth_mean = gee_data['flood_depth_mean']
         flood_depth_max = gee_data['flood_depth_max']
         terrain = gee_data['terrain']
@@ -49,7 +50,8 @@ def make_extractor(gee_data):
             .addBands(solar.rename("solar")) \
             .addBands(temp.rename("temp")) \
             .addBands(precip.rename("precip")) \
-            .addBands(flood.rename("flood")) \
+            .addBands(flood_occur.rename("flood_occur")) \
+            .addBands(flood_duration_mean.rename("flood_duration")) \
             .addBands(flood_depth_mean.rename("flood_mean")) \
             .addBands(flood_depth_max.rename("flood_max")) \
             .addBands(terrain.select("slope").rename("slope")) \
@@ -90,7 +92,8 @@ def extract_gee_values(df, gdf_points, gee_data):
             'solar': props.get('solar') if props.get('solar') > 5 else None, # Monthly Surface Solar Radiation (J/m²)
             'temp': props.get('temp') - 273.15 if props.get('temp') is not None else None, # Mean 2m Temperature (K)
             'precip': props.get('precip'), # Mean Monthly Precipitation (m)
-            'flood': props.get('flood'), 
+            'flood_occur': props.get('flood_occur'), # Annual Flood Occurrence
+            'flood_duration': props.get('flood_duration'), # Mean Flood Duration (days)
             'flood_mean': props.get('flood_mean'), # Mean Flood Depth (m)
             'flood_max': props.get('flood_max'), # Max Flood Depth (m)
         })

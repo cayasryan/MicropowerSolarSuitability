@@ -7,7 +7,8 @@ UNSUITABLE_LC = {"Snow/Ice","Water","Wetlands","Mangroves","Cropland"}
 
 THRESH = {
     "flood_extent": 0.4,
-    "flood_mean": 0.5,
+    "flood_duration": 10,
+    "flood_mean": 1.0,
     "flood_max": 1.0,
     "fault_dist": 5,
     "res_dist": 10,
@@ -34,7 +35,8 @@ RENAME_MAPPING = {
         'solar': 'Monthly Surface Solar Radiation (J/m²)',
         'temp': 'Mean 2m Temperature (°C)',
         'precip': 'Mean Monthly Precipitation (m)',
-        'flood': 'Flood Extent History',
+        'flood_occur': 'Annual Flood Occurrence',
+        'flood_duration': 'Mean Flood Duration (days)',
         'flood_mean': 'Mean Flood Depth (m)',
         'flood_max': 'Max Flood Depth (m)',
         'fault_line_prox': 'Fault Line Proximity (m)',
