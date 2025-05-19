@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from time import time
 import os
+# from PIL import Image
 
 from solmate_app.data_process.gee_process import init_gee
 from solmate_app.data_process.loader import load_static_layers, load_gee_data
@@ -13,6 +14,14 @@ import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 warnings.filterwarnings("ignore", category=pd.errors.SettingWithCopyWarning)
 
+# For logo
+import base64
+
+def get_base64_image(image_path):
+    with open(image_path, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
 # -----------------------------------------------------------------------------
 # HERO SECTION (HOME PAGE)
 # -----------------------------------------------------------------------------
@@ -20,16 +29,19 @@ def show_home_page():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         # Use custom HTML for a styled, center-aligned hero section
+    
+        base64_logo_string = get_base64_image("solmate_logo.png")
+
         st.markdown(
             """
             <div style="text-align: center; padding: 1rem 0;">
-                <h1 style="font-size: 5em;">🌞 SolMate</h1>
+                <h1 style="font-size: 5em;"><img src="data:image/png;base64,{logo}" width="150"> SolMate</h1>
                 <h3 >Your smart companion for solar site assessment.</h3>
                 <p style="font-size: 1.1em; color: #555;">
                     To get started, please provide the coordinates of the sites you want to assess.
                 </p>
             </div>
-            """,
+            """.format(logo=base64_logo_string),
             unsafe_allow_html=True
         )
 
