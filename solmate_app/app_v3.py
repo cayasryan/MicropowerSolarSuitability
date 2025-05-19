@@ -14,7 +14,7 @@ from solmate_app.ui.results_page import show_results_page
 
 st.set_page_config(
     page_title="SolMate – Solar Site Assessment Tool",
-    page_icon="https://emojiterra.com/sun-with-face/",
+    page_icon="🌞",
     layout="wide",
 )
 
