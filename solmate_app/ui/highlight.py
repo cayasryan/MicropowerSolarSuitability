@@ -52,7 +52,8 @@ def style_dataframe(df_pred, original_df):
     """
     Styles the DataFrame for display in Streamlit.
     """
-
+    import streamlit as st
+    
     # Define the columns to be moved to the front
     cols_to_front = ['suitability', 'remarks', 'land_cover', 
                      'in_protected_area', 'protected_area_prox', 'nearest_protected_area',
@@ -62,6 +63,19 @@ def style_dataframe(df_pred, original_df):
     ]
 
     pred_cols = df_pred[cols_to_front + [col for col in df_pred.columns if col not in cols_to_front]].drop(columns=['latitude', 'longitude'])
+
+    df_pred      = df_pred.reset_index(drop=True)        
+    original_df  = original_df.reset_index(drop=True)
+    pred_cols    = pred_cols.reset_index(drop=True)
+
+    st.write(df_final.index.is_unique)      # should be True
+    st.write(original_df.index.is_unique)   # True
+    st.write(pred_cols.index.is_unique)     # True
+
+    # If any is False, inspect duplicates:
+    dupes = df_final.index[df_final.index.duplicated()]
+    st.write(dupes[:10])
+
 
     df_final = pd.concat([df_pred[['latitude', 'longitude']],
                         original_df.drop(columns=['latitude', 'longitude']),
