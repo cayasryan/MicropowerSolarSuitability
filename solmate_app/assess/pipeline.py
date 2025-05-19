@@ -5,12 +5,13 @@ import time
 
 from solmate_app.assess.features import extract_features
 from solmate_app.assess.rules import classify
+from solmate_app.config import BATCH_SIZE
 
 
 def assess(df_coords, static_layers, gee_layers):
     df_final = pd.DataFrame()
     total_rows = df_coords.shape[0]
-    batch_size = 1000
+    batch_size = BATCH_SIZE
     total_batches = (total_rows + batch_size - 1) // batch_size  # Ceiling division
     progress_bar = None
 
@@ -41,7 +42,8 @@ def assess(df_coords, static_layers, gee_layers):
             eta_str = str(dt.timedelta(seconds=int(eta_seconds)))
             eta_text.text(f"Estimated time remaining: {eta_str}")
 
-    if progress_bar:
-        progress_bar.empty()  # Remove the progress bar after completion
+    if total_batches > 1:
+        progress_bar.empty()
+        eta_text.empty()  # Remove the progress bar after completion
 
     return df_final

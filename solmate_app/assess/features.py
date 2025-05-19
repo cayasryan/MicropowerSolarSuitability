@@ -24,9 +24,10 @@ def extract_features(df, static_layers, gee_layers):
     # Extract GEE values
     df = extract_gee_values(df, gdf_points, gee_layers)
 
-    gdf_points = gdf_points.to_crs(epsg=32651)
+    gdf_points = gdf_points.to_crs(epsg=32651).reset_index(drop=True)
 
     # Add proximity columns
+    df = df.reset_index(drop=True)
     df = add_proximity_cols(df, gdf_points, static_layers)
 
     return df

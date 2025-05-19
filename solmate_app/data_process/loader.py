@@ -3,12 +3,14 @@ import pandas as pd
 import geopandas as gpd
 import dask_geopandas as dgpd
 import ee
+import streamlit as st
 
 from solmate_app.config import DATA_DIR
 from solmate_app.config import COMMON_CRS, COMMON_SCALE
 
 def _read(path): return gpd.read_file(Path(DATA_DIR, path))
 
+@st.cache_data
 def load_static_layers():
     residential_1 = _read("residential_areas_part1.geojson")
     residential_2 = _read("residential_areas_part2.geojson")
@@ -26,6 +28,7 @@ def load_static_layers():
         "gdf_main_roads": pd.concat([main_roads_1, main_roads_2], axis=0, ignore_index=True),
     }
 
+@st.cache_resource
 def load_gee_data():
     # Load SRTM elevation data
     srtm = ee.Image('USGS/SRTMGL1_003')

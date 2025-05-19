@@ -68,14 +68,6 @@ def style_dataframe(df_pred, original_df):
     original_df  = original_df.reset_index(drop=True)
     pred_cols    = pred_cols.reset_index(drop=True)
 
-    st.write(df_final.index.is_unique)      # should be True
-    st.write(original_df.index.is_unique)   # True
-    st.write(pred_cols.index.is_unique)     # True
-
-    # If any is False, inspect duplicates:
-    dupes = df_final.index[df_final.index.duplicated()]
-    st.write(dupes[:10])
-
 
     df_final = pd.concat([df_pred[['latitude', 'longitude']],
                         original_df.drop(columns=['latitude', 'longitude']),
