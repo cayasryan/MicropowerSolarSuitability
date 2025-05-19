@@ -100,7 +100,7 @@ def show_home_page():
 
 
     # -----------------------------------------------------------------------------
-    # INITIALISE DATA SOURCES
+    # INITIALIZE DATA SOURCES
     # -----------------------------------------------------------------------------
     with col2:
         with st.spinner("Initializing Earth Engine and fetching data …"):

@@ -98,7 +98,7 @@ def extract_gee_values(df, gdf_points, gee_data):
             'flood_max': props.get('flood_max'), # Max Flood Depth (m)
         })
 
-    df['id'] = df.index
+    df.loc[:, 'id'] = df.index
     extracted = pd.DataFrame(extracted)
 
     # Merge the extracted data with the original DataFrame
