@@ -5,6 +5,10 @@ import dask_geopandas as dgpd
 import ee
 import streamlit as st
 
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+warnings.filterwarnings("ignore", category=pd.errors.SettingWithCopyWarning)
+
 from solmate_app.config import DATA_DIR
 from solmate_app.config import COMMON_CRS, COMMON_SCALE
 

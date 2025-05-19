@@ -9,7 +9,9 @@ from solmate_app.data_process.utils import extract_coords
 from solmate_app.assess.pipeline import assess
 from solmate_app.ui.highlight import style_dataframe
 
-
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+warnings.filterwarnings("ignore", category=pd.errors.SettingWithCopyWarning)
 
 # -----------------------------------------------------------------------------
 # HERO SECTION (HOME PAGE)

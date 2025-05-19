@@ -6,6 +6,10 @@ import streamlit as st
 
 from solmate_app.constants import LAND_LABELS
 
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+warnings.filterwarnings("ignore", category=pd.errors.SettingWithCopyWarning)
+
 
 def init_gee():
     # Initialize Earth Engine

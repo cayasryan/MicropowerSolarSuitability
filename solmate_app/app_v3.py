@@ -2,6 +2,11 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+import warnings
+import pandas as pd
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+warnings.filterwarnings("ignore", category=pd.errors.SettingWithCopyWarning)
+
 import streamlit as st
 
 from solmate_app.ui.home_page import show_home_page
