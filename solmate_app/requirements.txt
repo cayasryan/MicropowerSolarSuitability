@@ -8,3 +8,4 @@ geemap
 dask-geopandas
 shapely
 geopandas
+altair

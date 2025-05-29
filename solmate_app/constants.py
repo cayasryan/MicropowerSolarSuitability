@@ -61,4 +61,5 @@ HIGHLIGHT_COLORS = {
                 'highlight_affected_feature': 'background-color: #f8d7da',
                 'summary_suitable': '#2e7d32',
                 'summary_unsuitable': '#d32f2f',
+                'issues_breakdown': '#E87461',
             }
